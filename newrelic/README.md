@@ -270,6 +270,7 @@ Choose the installation method that best fits your environment:
 - **[Terraform (Optional)](#terraform-automation-optional)**: Automate New Relic account setup and/or resource creation
 - **[Kubernetes](#kubernetes-installation)**: Deploy to a Kubernetes cluster using Helm
 - **[Docker](#docker-installation)**: Run locally with Docker Compose
+- **[Newrelic CLI (Optional)](#newrelic-cli-optional)**: Run the stack with interact menu
 
 **Note**: All installation methods require a New Relic license key (this can be generated via [Terraform](#terraform-automation-optional)). You can input it when prompted, or export a `NEW_RELIC_LICENSE_KEY` environment variable to avoid repeated prompts.
 
