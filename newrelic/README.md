@@ -10,12 +10,14 @@ This repository contains a fork of the OpenTelemetry Astronomy Shop, a microserv
   - [Kubernetes](#kubernetes)
   - [Docker](#docker)
   - [Terraform (Optional)](#terraform-optional)
+  - [Golang (Optional)](#golang-optional)
 
 - [Setup](#setup)
 - [Installation Options](#installation-options)
   - [Kubernetes Installation](#kubernetes-installation)
   - [Docker Installation](#docker-installation)
   - [Terraform Automation (Optional)](#terraform-automation-optional)
+  - [Newrelic CLI (Optional)](#newrelic-cli-optional)
 - [Validating the Install](#validating-the-install)
 - [Accessing the Flagd UI](#accessing-the-flagd-ui)
 - [Troubleshooting](#troubleshooting)
@@ -164,27 +166,27 @@ Example output:
 ```bash
 $ ./install-docker.sh
 [+] Running 21/21
- ✔ Container fraud-detection  Started      16.2s 
- ✔ Container accounting       Started      16.2s 
- ✔ Container flagd-ui         Started       7.0s 
- ✔ Container checkout         Started      16.2s 
- ✔ Container frontend         Started      16.3s 
- ✔ Container cart             Started       7.9s 
- ✔ Container image-provider   Started       7.3s 
- ✔ Container recommendation   Started       8.5s 
- ✔ Container ad               Started       7.8s 
- ✔ Container quote            Started       7.6s 
- ✔ Container load-generator   Started      16.4s 
- ✔ Container kafka            Healthy      16.0s 
- ✔ Container valkey-cart      Started       5.8s 
- ✔ Container payment          Started       8.0s 
- ✔ Container product-catalog  Started       7.8s 
- ✔ Container shipping         Started       7.5s 
- ✔ Container email            Started       7.3s 
- ✔ Container currency         Started       7.8s 
- ✔ Container otel-collector   Started       6.5s 
- ✔ Container flagd            Started       5.9s 
- ✔ Container frontend-proxy   Started      15.7s 
+ ✔ Container fraud-detection  Started      16.2s
+ ✔ Container accounting       Started      16.2s
+ ✔ Container flagd-ui         Started       7.0s
+ ✔ Container checkout         Started      16.2s
+ ✔ Container frontend         Started      16.3s
+ ✔ Container cart             Started       7.9s
+ ✔ Container image-provider   Started       7.3s
+ ✔ Container recommendation   Started       8.5s
+ ✔ Container ad               Started       7.8s
+ ✔ Container quote            Started       7.6s
+ ✔ Container load-generator   Started      16.4s
+ ✔ Container kafka            Healthy      16.0s
+ ✔ Container valkey-cart      Started       5.8s
+ ✔ Container payment          Started       8.0s
+ ✔ Container product-catalog  Started       7.8s
+ ✔ Container shipping         Started       7.5s
+ ✔ Container email            Started       7.3s
+ ✔ Container currency         Started       7.8s
+ ✔ Container otel-collector   Started       6.5s
+ ✔ Container flagd            Started       5.9s
+ ✔ Container frontend-proxy   Started      15.7s
  ```
 
 > **_NOTE:_** It can take anywhere from 2 - 5 minutes for data to flow through the OTel Collector and become visible in New Relic once the containers are running.  Please have patience.  If you want to check on the status of the OTel collector, you can run `docker logs -f $(docker ps | grep otel-collector | awk '{print $1}')`.  Use `CTRL + C` to exit.
@@ -201,30 +203,30 @@ Example Output - (Warnings can be ignored):
 
  ```bash
 $ ./cleanup-docker.sh
-WARN[0000] The "NEW_RELIC_LICENSE_KEY" variable is not set. Defaulting to a blank string. 
-WARN[0000] The "NEW_RELIC_LICENSE_KEY" variable is not set. Defaulting to a blank string. 
+WARN[0000] The "NEW_RELIC_LICENSE_KEY" variable is not set. Defaulting to a blank string.
+WARN[0000] The "NEW_RELIC_LICENSE_KEY" variable is not set. Defaulting to a blank string.
 [+] Running 22/22
- ✔ Container frontend-proxy    Removed      10.2s 
- ✔ Container fraud-detection   Removed      0.6s 
- ✔ Container accounting        Removed      0.2s 
- ✔ Container load-generator    Removed      5.4s 
- ✔ Container flagd-ui          Removed      0.2s 
- ✔ Container frontend          Removed      0.2s 
- ✔ Container checkout          Removed      0.2s 
- ✔ Container quote             Removed      0.3s 
- ✔ Container recommendation    Removed      10.2s 
- ✔ Container ad                Removed      0.6s 
- ✔ Container image-provider    Removed      0.2s 
- ✔ Container shipping          Removed      10.2s 
- ✔ Container cart              Removed      0.3s 
- ✔ Container kafka             Removed      1.3s 
- ✔ Container email             Removed      0.2s 
- ✔ Container payment           Removed      0.8s 
- ✔ Container currency          Removed      10.2s 
- ✔ Container valkey-cart       Removed      0.2s 
- ✔ Container product-catalog   Removed      0.1s 
- ✔ Container flagd             Removed      0.2s 
- ✔ Container otel-collector    Removed      1.5s 
+ ✔ Container frontend-proxy    Removed      10.2s
+ ✔ Container fraud-detection   Removed      0.6s
+ ✔ Container accounting        Removed      0.2s
+ ✔ Container load-generator    Removed      5.4s
+ ✔ Container flagd-ui          Removed      0.2s
+ ✔ Container frontend          Removed      0.2s
+ ✔ Container checkout          Removed      0.2s
+ ✔ Container quote             Removed      0.3s
+ ✔ Container recommendation    Removed      10.2s
+ ✔ Container ad                Removed      0.6s
+ ✔ Container image-provider    Removed      0.2s
+ ✔ Container shipping          Removed      10.2s
+ ✔ Container cart              Removed      0.3s
+ ✔ Container kafka             Removed      1.3s
+ ✔ Container email             Removed      0.2s
+ ✔ Container payment           Removed      0.8s
+ ✔ Container currency          Removed      10.2s
+ ✔ Container valkey-cart       Removed      0.2s
+ ✔ Container product-catalog   Removed      0.1s
+ ✔ Container flagd             Removed      0.2s
+ ✔ Container otel-collector    Removed      1.5s
  ✔ Network opentelemetry-demo  Removed      0.0s
  ```
 
@@ -242,6 +244,10 @@ If you plan to use the Terraform automation modules to create New Relic resource
 - New Relic User API Key (for managing accounts and resources)
 
 The Terraform modules are completely optional. You can run the demo with just your existing New Relic license key.
+
+### Golang (Optional)
+
+If you plan to use NewRelic CLI Module to run this stack, check [prerequisites here](cli/README.md#prerequisites)
 
 ## Setup
 
@@ -397,9 +403,50 @@ cd opentelemetry-demo/newrelic/scripts
 ./cleanup-nr-account.sh     # Remove sub-account and license key
 ```
 
+## Newrelic CLI (Optional)
+
+This repository includes cli module and automated scripts to simplify New Relic account setup and showcase observability best practices. Using these modules is completely optional - the demo works perfectly fine with your existing New Relic license key.
+
+### Why Use Newrelic CLI?
+
+The Newrelic CLI modules demonstrate how to:
+- **Automate account setup** - Programmatically run the demo stack
+- **Showcase New Relic capabilities** - Implement browser APM observability features
+- **Follow Observability as Code best practices** - Manage observability resources alongside your application infrastructure
+
+### Quick Start with New Relic CLI
+
+```bash
+# Navigate to the scripts directory
+cd opentelemetry-demo/newrelic/cli
+
+# 1. Run the cli
+> go run .
+=======================================================
+New Relic OpenTelemetry Demo - CLI
+=======================================================
+Current Configuration:
+  Region:     US
+  Account ID: N/A
+  License:    N/A
+  API Key:    N/A
+  Browser:    Disabled
+=======================================================
+
+Choose an ACTION:
+  1. Install
+  2. Upgrade
+  3. Uninstall
+  4. Exit
+
+# 2. Select the options to start the open telemetry stack in the interaction menu
+```
+
+[READ MORE](cli/README.md)
+
 ## Validating the Install
 
-Check the container logs for the OTel Collector to ensure there aren't any errors related to data collection or shipping telemetry to the New Relic platform. After a few minutes, you should see a list of the Astronomy Shop services in the `Services - OpenTelemetry` menu under the `All Entities` view.  
+Check the container logs for the OTel Collector to ensure there aren't any errors related to data collection or shipping telemetry to the New Relic platform. After a few minutes, you should see a list of the Astronomy Shop services in the `Services - OpenTelemetry` menu under the `All Entities` view.
 
 ![all_otel_entities](./images/all_otel_entities.png)
 
