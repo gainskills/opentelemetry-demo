@@ -16,6 +16,7 @@ This repository contains a fork of the OpenTelemetry Astronomy Shop, a microserv
   - [Kubernetes Installation](#kubernetes-installation)
   - [Docker Installation](#docker-installation)
   - [Terraform Automation (Optional)](#terraform-automation-optional)
+  - [Newrelic CLI (Optional)](#newrelic-cli-optional)
 - [Validating the Install](#validating-the-install)
 - [Accessing the Flagd UI](#accessing-the-flagd-ui)
 - [Troubleshooting](#troubleshooting)
@@ -244,6 +245,10 @@ If you plan to use the Terraform automation modules to create New Relic resource
 
 The Terraform modules are completely optional. You can run the demo with just your existing New Relic license key.
 
+### Golang (Optional)
+
+If you plan to use NewRelic CLI Module to run this stack, check [prerequisites here](cli/README.md#prerequisites)
+
 ## Setup
 
 Clone the repo.
@@ -265,6 +270,7 @@ Choose the installation method that best fits your environment:
 - **[Terraform (Optional)](#terraform-automation-optional)**: Automate New Relic account setup and/or resource creation
 - **[Kubernetes](#kubernetes-installation)**: Deploy to a Kubernetes cluster using Helm
 - **[Docker](#docker-installation)**: Run locally with Docker Compose
+- **[Newrelic CLI (Optional)](#newrelic-cli-optional)**: Run the stack with interact menu
 
 **Note**: All installation methods require a New Relic license key (this can be generated via [Terraform](#terraform-automation-optional)). You can input it when prompted, or export a `NEW_RELIC_LICENSE_KEY` environment variable to avoid repeated prompts.
 
@@ -398,6 +404,47 @@ cd opentelemetry-demo/newrelic/scripts
 ./cleanup-nr-resources.sh  # Remove New Relic resources (SLOs, etc.)
 ./cleanup-nr-account.sh     # Remove sub-account and license key
 ```
+
+## Newrelic CLI (Optional)
+
+This repository includes cli module and automated scripts to simplify New Relic account setup and showcase observability best practices. Using these modules is completely optional - the demo works perfectly fine with your existing New Relic license key.
+
+### Why Use Newrelic CLI?
+
+The Newrelic CLI modules demonstrate how to:
+- **Automate account setup** - Programmatically run the demo stack
+- **Showcase New Relic capabilities** - Implement browser APM observability features
+- **Follow Observability as Code best practices** - Manage observability resources alongside your application infrastructure
+
+### Quick Start with New Relic CLI
+
+```bash
+# Navigate to the scripts directory
+cd opentelemetry-demo/newrelic/cli
+
+# 1. Run the cli
+> go run .
+=======================================================
+New Relic OpenTelemetry Demo - CLI
+=======================================================
+Current Configuration:
+  Region:     US
+  Account ID: N/A
+  License:    N/A
+  API Key:    N/A
+  Browser:    Disabled
+=======================================================
+
+Choose an ACTION:
+  1. Install
+  2. Upgrade
+  3. Uninstall
+  4. Exit
+
+# 2. Select the options to start the open telemetry stack in the interaction menu
+```
+
+[READ MORE](cli/README.md)
 
 ## Validating the Install
 

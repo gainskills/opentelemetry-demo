@@ -44,6 +44,16 @@ default:
       value: "10000"
 
 components:
+  flagd:
+    sidecarContainers:
+      - name: flagd-ui
+        useDefault:
+          env: true
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            memory: 256Mi
   shipping:
     # Workaround until the upstream chart waits for flagd itself; remove once
     # https://github.com/open-telemetry/opentelemetry-helm-charts/pull/2384 merges.

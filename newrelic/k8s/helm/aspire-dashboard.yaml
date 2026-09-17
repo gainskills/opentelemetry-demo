@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aspire-dashboard
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: aspire-dashboard
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aspire-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aspire-dashboard
+        app.kubernetes.io/component: dashboard
+    spec:
+      containers:
+        - name: aspire-dashboard
+          image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+          ports:
+            - name: ui
+              containerPort: 18888
+              protocol: TCP
+            - name: otlp
+              containerPort: 18889
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://+:18888"
+            - name: DOTNET_DASHBOARD_OTLP_ENDPOINT_URL
+              value: "http://+:18889"
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              memory: 100Mi
+              cpu: 100m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aspire-dashboard
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: aspire-dashboard
+    app.kubernetes.io/component: dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - name: ui
+      port: 18888
+      targetPort: 18888
+      protocol: TCP
+    - name: otlp
+      port: 18889
+      targetPort: 18889
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: aspire-dashboard
