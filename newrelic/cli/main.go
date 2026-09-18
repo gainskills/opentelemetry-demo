@@ -203,6 +203,17 @@ func parseArgs() (Config, []string) {
 			case "NEW_RELIC_ENABLE_BROWSER":
 				enable := strings.ToLower(val) == "true" || val == ""
 				cfg.EnableBrowser = &enable
+			case "ENABLE_NRDOT", "NRDOT":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableNrdot = &b
+			case "ENABLE_NRI_BUNDLE", "NRI_BUNDLE":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableNriBundle = &b
+			case "ENABLE_DEMO_OTEL_COLLECTOR", "ENABLE_NRI_BUNDLE_OTEL_COLLECTOR", "DEMO_COLLECTOR":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableDemoOtelCollector = &b
+			case "NEW_RELIC_OTLP_ENDPOINT":
+				cfg.OtlpEndpoint = val
 			case "TF_VAR_SUBACCOUNT_NAME":
 				cfg.SubaccountName = val
 			case "TF_VAR_ADMIN_GROUP_NAME":
@@ -235,10 +246,12 @@ func printUsage() {
 
 USAGE:
   # Interactive Mode
-  go run newrelic-opentelemetry-demo.go
+  go run .
+  # OR: ./nr-otel-cli
 
   # Batch Mode
-  go run newrelic-opentelemetry-demo.go <action> <target> [flags]
+  go run . <action> <target> [flags]
+  # OR: ./nr-otel-cli <action> <target> [flags]
 
 ACTIONS:
   install     - Initialize and deploy the specified target
@@ -254,6 +267,10 @@ TARGETS:
 GLOBAL FLAGS:
   --NEW_RELIC_REGION          - New Relic Region: "US" or "EU" (Default: US)
   --NEW_RELIC_ENABLE_BROWSER  - Set to "true" to enable Browser Monitoring (K8s/Docker only)
+  --ENABLE_NRDOT              - Set to "false" to disable New Relic OTel Collector (NRDOT) (Default: true)
+  --ENABLE_NRI_BUNDLE         - Set to "true" to enable New Relic Infrastructure Bundle (nri-bundle) (Default: false)
+  --ENABLE_DEMO_OTEL_COLLECTOR - Set to "true" to enable the demo's own OTel Collector for app telemetry (Default: true when NRDOT disabled)
+  --NEW_RELIC_OTLP_ENDPOINT   - New Relic OTLP endpoint for the demo's collector (Default: derived from region; override for a Pipeline Control gateway)
 
 INSTALL FLAGS:
   --NEW_RELIC_LICENSE_KEY     - New Relic License Key (ends in NRAL; K8s/Docker only)
@@ -289,6 +306,16 @@ func printCurrentState(cfg *Config) {
 		}
 	}
 
+	nrdotStatus := ColorGreen + "Enabled" + ColorReset
+	if cfg.EnableNrdot != nil && !*cfg.EnableNrdot {
+		nrdotStatus = ColorYellow + "Disabled" + ColorReset
+	}
+
+	nriBundleStatus := ColorDim + "Disabled" + ColorReset
+	if cfg.EnableNriBundle != nil && *cfg.EnableNriBundle {
+		nriBundleStatus = ColorGreen + "Enabled" + ColorReset
+	}
+
 	fmt.Println(ColorCyan + "=======================================================" + ColorReset)
 	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold, ColorReset)
 	fmt.Printf("  %sRegion:%s     %s\n", ColorCyan, ColorReset, cfg.Region)
@@ -296,6 +323,15 @@ func printCurrentState(cfg *Config) {
 	fmt.Printf("  %sLicense:%s    %s\n", ColorCyan, ColorReset, maskString(cfg.LicenseKey))
 	fmt.Printf("  %sAPI Key:%s    %s\n", ColorCyan, ColorReset, maskString(cfg.ApiKey))
 	fmt.Printf("  %sBrowser:%s    %s\n", ColorCyan, ColorReset, browserStatus)
+	fmt.Printf("  %sNRDOT:%s      %s\n", ColorCyan, ColorReset, nrdotStatus)
+	fmt.Printf("  %sNRI-Bundle:%s %s\n", ColorCyan, ColorReset, nriBundleStatus)
+	if cfg.EnableNrdot != nil && !*cfg.EnableNrdot {
+		collectorStatus := ColorDim + "Disabled" + ColorReset
+		if cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector {
+			collectorStatus = ColorGreen + "Enabled" + ColorReset
+		}
+		fmt.Printf("  %sDemo OTel:%s  %s\n", ColorCyan, ColorReset, collectorStatus)
+	}
 	fmt.Println(ColorCyan + "=======================================================" + ColorReset)
 }
 

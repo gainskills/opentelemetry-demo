@@ -1,0 +1,114 @@
+global:
+  # Deliberately different from the demo's own k8s.cluster.name
+  # (opentelemetry-demo) so nri-bundle data stays separable in New Relic when
+  # it runs alongside NRDOT or the demo's collector.
+  cluster: "opentelemetry-demo-nri"
+  customSecretName: "newrelic-license-key"
+  customSecretLicenseKey: "license-key"
+  lowDataMode: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  customAttributes:
+    demo.telemetry.source: nri-bundle
+
+newrelic-infrastructure:
+  enabled: true
+  enableLinux: true
+  enableWindows: false
+  enableProcessMetrics: false
+  common:
+    config:
+      namespaceSelector:
+        matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values:
+              - kube-node-lease
+              - kube-public
+              - kube-system
+      ksm:
+        # The scraper discovers kube-state-metrics by label, and NRDOT ships its
+        # own KSM carrying the same app.kubernetes.io/name label. Without this
+        # marker (set below via kube-state-metrics.customLabels) the scraper can
+        # bind to NRDOT's KSM instead of this release's.
+        selector: "newrelic.com/custom-ksm=true"
+
+nri-metadata-injection:
+  enabled: true
+
+kube-state-metrics:
+  enabled: true
+  prometheusScrape: false
+  customLabels:
+    newrelic.com/custom-ksm: "true"
+  nodeSelector:
+    kubernetes.io/os: linux
+  collectors:
+    - certificatesigningrequests
+    - configmaps
+    - cronjobs
+    - deployments
+    - horizontalpodautoscalers
+    - ingresses
+    - jobs
+    - leases
+    - limitranges
+    - mutatingwebhookconfigurations
+    - namespaces
+    - networkpolicies
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicationcontrollers
+    - resourcequotas
+    - secrets
+    - services
+    - statefulsets
+    - storageclasses
+    - validatingwebhookconfigurations
+    - volumeattachments
+    # New Relic builds DaemonSet and ReplicaSet entities from these
+    # collectors; enable them if those workloads should appear in the
+    # Kubernetes UI.
+    # - daemonsets
+    # - replicasets
+    # - endpointslices
+
+# Tails every container log on every node. When the demo apps also export logs
+# over OTLP (via NRDOT or the demo's own collector), each app log line reaches
+# New Relic twice.
+newrelic-logging:
+  enabled: true
+  enableLinux: true
+  enableWindows: false
+  sendMetrics: false
+  nodeSelector:
+    kubernetes.io/os: linux
+
+nri-prometheus:
+  enabled: false
+
+nri-kube-events:
+  enabled: true
+
+newrelic-pixie:
+  enabled: false
+
+pixie-chart:
+  enabled: false
+
+newrelic-infra-operator:
+  enabled: false
+
+newrelic-prometheus-agent:
+  enabled: false
+
+newrelic-k8s-metrics-adapter:
+  enabled: false
+
+# Kubernetes APM auto-attach. Injects New Relic APM agents into supported
+# workloads, which would double-instrument the demo's OTel SDKs.
+k8s-agents-operator:
+  enabled: false

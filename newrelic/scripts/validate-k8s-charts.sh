@@ -176,5 +176,89 @@ fi
 
 echo "✓ Rendered manifest is current"
 
+# Compare nri-bundle rendered vs committed
+echo ""
+echo "Checking for stale nri-bundle rendered manifest..."
+
+NRI_RENDERED=$(mktemp)
+BASE_RENDER=$(mktemp)
+OVERLAY_RENDER=$(mktemp)
+trap 'rm -f "$RENDERED" "$CONFIG" "$NRI_RENDERED" "$BASE_RENDER" "$OVERLAY_RENDER"' EXIT
+
+helm template nri-bundle newrelic/nri-bundle \
+    --version "$NRI_BUNDLE_CHART_VERSION" \
+    -n "$NRI_BUNDLE_NAMESPACE" \
+    --create-namespace \
+    -f "$NRI_BUNDLE_VALUES_PATH" > "$NRI_RENDERED"
+
+NRI_DIFF=$(diff -u <(sed 's/[[:space:]]*$//' "$NRI_BUNDLE_RENDER_PATH" | sed '/^$/d') \
+                   <(sed 's/[[:space:]]*$//' "$NRI_RENDERED" | sed '/^$/d') || true)
+
+if [ -n "$NRI_DIFF" ]; then
+    echo "ERROR: Rendered nri-bundle manifest differs from committed"
+    echo "This means:"
+    echo "  - Chart version changed"
+    echo "  - Values changed"
+    echo "  - Something is broken"
+    echo ""
+    echo "--- committed ($NRI_BUNDLE_RENDER_PATH)"
+    echo "+++ freshly rendered"
+    echo "$NRI_DIFF"
+    echo ""
+    echo "Fix: Run newrelic/scripts/update-k8s.sh to re-render"
+    exit 1
+fi
+
+echo "✓ Rendered nri-bundle manifest is current"
+
+# Helm replaces lists instead of merging them, so any list re-declared in the
+# NRI collector overlay silently drops entries it omits. Compare the base and
+# overlay renders to catch that: the app services' environment variable names
+# must be identical, and the collector Service name must match the overlay's
+# OTEL_COLLECTOR_NAME.
+echo ""
+echo "Checking NRI collector overlay against the base values..."
+
+OTEL_DEMO_VALUES_PATH="${OTEL_DEMO_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo.yaml}"
+OTEL_DEMO_NRI_VALUES_PATH="${OTEL_DEMO_NRI_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo-nri-collector.yaml}"
+
+helm template otel-demo open-telemetry/opentelemetry-demo \
+    --version "$OTEL_DEMO_CHART_VERSION" -n opentelemetry-demo \
+    -f "$OTEL_DEMO_VALUES_PATH" > "$BASE_RENDER"
+helm template otel-demo open-telemetry/opentelemetry-demo \
+    --version "$OTEL_DEMO_CHART_VERSION" -n opentelemetry-demo \
+    -f "$OTEL_DEMO_VALUES_PATH" -f "$OTEL_DEMO_NRI_VALUES_PATH" > "$OVERLAY_RENDER"
+
+service_env_names() {
+    yq -r 'select(.kind == "Deployment") | .metadata.name as $n | .spec.template.spec.containers[].env[]?.name | "\($n) \(.)"' "$1" | grep -v '^[[:space:]]*$' | sort
+}
+
+ENV_DIFF=$(diff <(service_env_names "$BASE_RENDER") <(service_env_names "$OVERLAY_RENDER") || true)
+if [ -n "$ENV_DIFF" ]; then
+    echo "ERROR: the NRI collector overlay changes which environment variables are set"
+    echo "$ENV_DIFF"
+    echo ""
+    echo "Fix: re-declare the full default.env list in $OTEL_DEMO_NRI_VALUES_PATH"
+    exit 1
+fi
+
+OVERLAY_COLLECTOR_NAME=$(yq -r 'select(.kind == "Deployment" and .metadata.name == "frontend") | .spec.template.spec.containers[0].env[] | select(.name == "OTEL_COLLECTOR_NAME") | .value' "$OVERLAY_RENDER")
+OVERLAY_SERVICES=$(yq -r 'select(.kind == "Service") | .metadata.name' "$OVERLAY_RENDER")
+if ! grep -qx "$OVERLAY_COLLECTOR_NAME" <<< "$OVERLAY_SERVICES"; then
+    echo "ERROR: OTEL_COLLECTOR_NAME '$OVERLAY_COLLECTOR_NAME' does not match any rendered Service"
+    exit 1
+fi
+
+OVERLAY_COLLECTOR_CONFIG=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "otel-collector-agent") | .data | to_entries | .[0].value' "$OVERLAY_RENDER")
+for pipeline in traces metrics logs; do
+    EXPORTERS=$(yq -r ".service.pipelines.$pipeline.exporters[]" <<< "$OVERLAY_COLLECTOR_CONFIG")
+    if ! grep -qx "otlphttp/newrelic" <<< "$EXPORTERS"; then
+        echo "ERROR: overlay $pipeline pipeline does not export to otlphttp/newrelic"
+        exit 1
+    fi
+done
+
+echo "✓ NRI collector overlay preserves base environment and pipelines"
+
 echo ""
 echo "✓ All validations passed"

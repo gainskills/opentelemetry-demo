@@ -41,7 +41,11 @@ func promptUser(label string, validator func(string) error) string {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Printf("%s: ", label)
-		rawInput, _ := reader.ReadString('\n')
+		rawInput, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\nError: unexpected end of input while prompting for %s\n", label)
+			os.Exit(1)
+		}
 		cleanedInput := strings.TrimSpace(rawInput)
 		if validator != nil {
 			if err := validator(cleanedInput); err != nil {
@@ -56,15 +60,30 @@ func promptUser(label string, validator func(string) error) string {
 }
 
 func promptBool(label string) bool {
+	return promptBoolWithDefault(label, false)
+}
+
+func promptBoolWithDefault(label string, defaultVal bool) bool {
 	reader := bufio.NewReader(os.Stdin)
+	prompt := "[y/N]"
+	if defaultVal {
+		prompt = "[Y/n]"
+	}
 	for {
-		fmt.Printf("%s [y/N]: ", label)
-		text, _ := reader.ReadString('\n')
+		fmt.Printf("%s %s: ", label, prompt)
+		text, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println()
+			return defaultVal
+		}
 		text = strings.TrimSpace(strings.ToLower(text))
+		if text == "" {
+			return defaultVal
+		}
 		if text == "y" || text == "yes" {
 			return true
 		}
-		if text == "n" || text == "no" || text == "" {
+		if text == "n" || text == "no" {
 			return false
 		}
 	}

@@ -94,6 +94,16 @@ All flags can be passed as command-line arguments (e.g., `--NEW_RELIC_REGION=EU`
 * `--NEW_RELIC_REGION`: "US" or "EU" (Default: US).
 * `--NEW_RELIC_ENABLE_BROWSER`: Set to "true" to enable Browser Monitoring (K8s/Docker only).
 
+### Kubernetes Monitoring Flags (Target: `k8s`)
+
+* `--ENABLE_NRDOT`: Set to "false" to skip the New Relic K8s OpenTelemetry Collector (Default: true).
+* `--ENABLE_NRI_BUNDLE`: Set to "true" to deploy the New Relic Infrastructure bundle into its own `newrelic` namespace (Default: false).
+* `--ENABLE_DEMO_OTEL_COLLECTOR`: Set to "true" to deploy the demo's own OpenTelemetry Collector exporting to New Relic. Only applies when `ENABLE_NRDOT` is false (Default: true in that case).
+* `--NEW_RELIC_OTLP_ENDPOINT`: OTLP endpoint for the demo's own collector. Derived from the region by default; override to route through a Pipeline Control gateway.
+
+See [Kubernetes monitoring options](../README.md#kubernetes-monitoring-options)
+for the supported combinations and what each one collects.
+
 ### Deployment Flags (K8s / Docker)
 
 * `--NEW_RELIC_LICENSE_KEY`: Your New Relic License Key (must end in `NRAL`).

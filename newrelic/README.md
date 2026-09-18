@@ -63,7 +63,13 @@ You can set environment variables to avoid interactive prompts. If not set, the 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEW_RELIC_LICENSE_KEY` | Yes | New Relic Ingest License Key |
+| `NEW_RELIC_REGION` | No | `us`, `eu` or `jp` (default: us) |
+| `NEW_RELIC_OTLP_ENDPOINT` | No | OTLP endpoint the demo's own collector exports to. Derived from `NEW_RELIC_REGION`; override to route through a Pipeline Control gateway |
 | `IS_OPENSHIFT_CLUSTER` | No | Set to `y` for OpenShift clusters, `n` otherwise (default: n) |
+| `ENABLE_NRDOT` | No | Deploy the New Relic K8s OpenTelemetry Collector (default: y) |
+| `ENABLE_NRI_BUNDLE` | No | Deploy the New Relic Infrastructure bundle (default: n) |
+| `ENABLE_DEMO_OTEL_COLLECTOR` | No | Deploy the demo's own OpenTelemetry Collector exporting to New Relic. Only applies when `ENABLE_NRDOT=n` (default: y in that case) |
+| `NRI_BUNDLE_NAMESPACE` | No | Namespace for the Infrastructure bundle (default: newrelic) |
 
 **Example:**
 
@@ -72,6 +78,35 @@ export NEW_RELIC_LICENSE_KEY="your-license-key"
 export IS_OPENSHIFT_CLUSTER="n"
 ./install-k8s.sh
 ```
+
+### Kubernetes monitoring options
+
+The two New Relic Kubernetes solutions can be deployed independently, and the
+demo's own OpenTelemetry Collector can take over application telemetry when
+NRDOT is not deployed.
+
+| `ENABLE_NRDOT` | `ENABLE_NRI_BUNDLE` | `ENABLE_DEMO_OTEL_COLLECTOR` | Result |
+|---|---|---|---|
+| y | n | n | Default. NRDOT collects cluster, host and application telemetry |
+| y | y | n | Both solutions report; cluster and host telemetry is collected twice |
+| n | y | y | Infrastructure bundle for the cluster, demo collector for application telemetry |
+| n | n | y | Application telemetry only, no infrastructure monitoring |
+| n | * | n | Warned against: the demo's services have no collector to export to |
+
+The Infrastructure bundle installs into its own namespace (`newrelic` by
+default) with its own copy of the license key secret, and reports under the
+cluster name `opentelemetry-demo-nri` so its data stays separable from NRDOT's
+and the demo collector's, which both use `opentelemetry-demo`.
+
+When both solutions run at once, cluster, host and container log telemetry is
+collected by each of them independently. That is intentional, so each option
+can be enabled on its own or in combination; see the comments in
+`newrelic/k8s/helm/nri-bundle.yaml` for which features overlap.
+
+New Relic APM agents are not used by this demo: every service is instrumented
+with OpenTelemetry SDKs. `k8s-agents-operator` (Kubernetes APM auto-attach) is
+therefore disabled in `nri-bundle.yaml`, since injecting APM agents would
+double-instrument the services.
 
 Example output:
 
@@ -121,7 +156,7 @@ After you save changes, you can re-run `install-k8s.sh` to apply changes and red
 
 ### Cleanup Kubernetes
 
-To uninstall the demo from your cluster, you can use the `cleanup-k8s.sh` script.  This script will uninstall the helm release and delete the `opentelemetry-demo` namespace.
+To uninstall the demo from your cluster, you can use the `cleanup-k8s.sh` script.  This script will uninstall the helm releases and delete the `opentelemetry-demo` namespace, along with the Infrastructure bundle's namespace and its cluster-scoped resources if it was installed.
 
 ```bash
 ./cleanup-k8s.sh

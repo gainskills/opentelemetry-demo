@@ -9,10 +9,15 @@ import (
 
 const (
 	// NOTE: keep these in sync with newrelic/scripts/common.sh
-	// (OTEL_DEMO_CHART_VERSION / NR_K8S_CHART_VERSION). Tracked for de-duplication.
-	OtelDemoChartVersion = "0.41.2"
-	NrK8sChartVersion    = "0.14.2"
-	OtelDemoNamespace    = "opentelemetry-demo"
+	// (OTEL_DEMO_CHART_VERSION / NR_K8S_CHART_VERSION / NRI_BUNDLE_CHART_VERSION). Tracked for de-duplication.
+	OtelDemoChartVersion  = "0.41.2"
+	NrK8sChartVersion     = "0.14.2"
+	NriBundleChartVersion = "8.0.26"
+	OtelDemoNamespace     = "opentelemetry-demo"
+	// nri-bundle runs in its own namespace so it shares no Kubernetes objects
+	// with the demo or NRDOT. Secrets are namespaced, so handleK8s creates a
+	// copy of the license secret there from the same license key input.
+	NriBundleNamespace = "newrelic"
 )
 
 var (
@@ -25,7 +30,9 @@ var (
 	Paths = map[string]string{
 		"otel-values":         filepath.Join("..", "k8s", "helm", "opentelemetry-demo.yaml"),
 		"otel-browser-values": filepath.Join("..", "k8s", "helm", "nr-browser.yaml"),
+		"otel-nri-values":     filepath.Join("..", "k8s", "helm", "opentelemetry-demo-nri-collector.yaml"),
 		"nr-k8s-values":       filepath.Join("..", "k8s", "helm", "nr-k8s-otel-collector.yaml"),
+		"nri-bundle-values":   filepath.Join("..", "k8s", "helm", "nri-bundle.yaml"),
 		"docker-compose":      filepath.Join("..", "docker", "docker-compose.yml"),
 		"docker-patch":        filepath.Join("..", "docker", "config", "monkey-patch.js"),
 		"tf-account":          filepath.Join("..", "terraform", "nr_account"),
@@ -34,14 +41,19 @@ var (
 	}
 
 	Charts = map[string]struct{ Name, Repo, Version, NS string }{
-		"nr-k8s":    {"nr-k8s-otel-collector", "newrelic/nr-k8s-otel-collector", NrK8sChartVersion, OtelDemoNamespace},
-		"otel-demo": {"otel-demo", "open-telemetry/opentelemetry-demo", OtelDemoChartVersion, OtelDemoNamespace},
+		"nr-k8s":     {"nr-k8s-otel-collector", "newrelic/nr-k8s-otel-collector", NrK8sChartVersion, OtelDemoNamespace},
+		"nri-bundle": {"nri-bundle", "newrelic/nri-bundle", NriBundleChartVersion, NriBundleNamespace},
+		"otel-demo":  {"otel-demo", "open-telemetry/opentelemetry-demo", OtelDemoChartVersion, OtelDemoNamespace},
 	}
 )
 
 type Config struct {
 	LicenseKey, ApiKey, AccountId, Region, Target, Action                              string
 	EnableBrowser                                                                      *bool
+	EnableNrdot                                                                        *bool
+	EnableNriBundle                                                                    *bool
+	EnableDemoOtelCollector                                                            *bool
+	OtlpEndpoint                                                                       string
 	SubAccountId                                                                       string
 	ParentAccountId                                                                    string
 	SubaccountName, AdminGroupName                                                     string
@@ -60,6 +72,10 @@ func loadConfig(cfg *Config) {
 	if envData, err := os.ReadFile(".env"); err == nil {
 		lines := strings.Split(string(envData), "\n")
 		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
 			pair := strings.SplitN(line, "=", 2)
 			if len(pair) == 2 {
 				key := strings.TrimSpace(pair[0])
@@ -142,15 +158,68 @@ func loadConfig(cfg *Config) {
 		}
 	}
 
+	// 4. Populate K8s component flags from Env
+	if cfg.EnableNrdot == nil {
+		if envVal := os.Getenv("ENABLE_NRDOT"); envVal != "" {
+			b := strings.ToLower(envVal) == "y" || strings.ToLower(envVal) == "true"
+			cfg.EnableNrdot = &b
+		}
+	}
+	if cfg.EnableNriBundle == nil {
+		if envVal := os.Getenv("ENABLE_NRI_BUNDLE"); envVal != "" {
+			b := strings.ToLower(envVal) == "y" || strings.ToLower(envVal) == "true"
+			cfg.EnableNriBundle = &b
+		}
+	}
+	if cfg.EnableDemoOtelCollector == nil {
+		// ENABLE_NRI_BUNDLE_OTEL_COLLECTOR is the former name of this switch.
+		envVal := os.Getenv("ENABLE_DEMO_OTEL_COLLECTOR")
+		if envVal == "" {
+			envVal = os.Getenv("ENABLE_NRI_BUNDLE_OTEL_COLLECTOR")
+		}
+		if envVal != "" {
+			b := strings.ToLower(envVal) == "y" || strings.ToLower(envVal) == "true"
+			cfg.EnableDemoOtelCollector = &b
+		}
+	}
+
+	if cfg.OtlpEndpoint == "" {
+		cfg.OtlpEndpoint = os.Getenv("NEW_RELIC_OTLP_ENDPOINT")
+	}
+
 	if cfg.Action == "uninstall" {
 		return
 	}
 
-	// 4. Consolidated Browser Prompt (Asked once here if still unknown)
+	// 5. Consolidated Browser Prompt (Asked once here if still unknown)
 	if cfg.EnableBrowser == nil && (cfg.Target == "k8s" || cfg.Target == "docker") {
 		fmt.Println("\n>>> Browser Monitoring configuration missing.")
 		enable := promptBool("Do you want to enable Digital Experience Monitoring (Browser)?")
 		cfg.EnableBrowser = &enable
+	}
+
+	// 6. Prompts for K8s monitoring components if target is k8s and not yet set
+	if cfg.Target == "k8s" {
+		if cfg.EnableNrdot == nil {
+			enable := promptBoolWithDefault("Enable New Relic OTel Collector (NRDOT)?", true)
+			cfg.EnableNrdot = &enable
+		}
+		if cfg.EnableNriBundle == nil {
+			enable := promptBoolWithDefault("Enable New Relic Infrastructure Bundle (nri-bundle)?", false)
+			cfg.EnableNriBundle = &enable
+		}
+		if cfg.EnableDemoOtelCollector == nil {
+			if !*cfg.EnableNrdot {
+				enable := promptBoolWithDefault("NRDOT is disabled. Enable the demo's own OpenTelemetry Collector to export app telemetry to New Relic?", true)
+				cfg.EnableDemoOtelCollector = &enable
+			} else {
+				f := false
+				cfg.EnableDemoOtelCollector = &f
+			}
+		}
+		if !*cfg.EnableNrdot && !*cfg.EnableDemoOtelCollector {
+			fmt.Println(ColorYellow + "Warning: no collector enabled. The demo's services will export telemetry to an endpoint that does not exist and no application data will reach New Relic." + ColorReset)
+		}
 	}
 
 	// Standard prompts for K8s/Docker

@@ -27,7 +27,7 @@
 # Dependencies:
 #   - helm
 #   - yq (YAML processor)
-#   - gh (GitHub CLI) - only needed if not using --dry-run
+#   - gh (GitHub CLI)
 #   - Access to the project source and Helm values files
 # -----------------------------------------------------------------------------
 set -euo pipefail
@@ -41,9 +41,7 @@ source "$(dirname "$0")/common.sh"
 
 check_tool_installed helm
 check_tool_installed yq
-if [[ "$DRY_RUN" == false ]]; then
-  check_tool_installed gh
-fi
+check_tool_installed gh
 
 template_chart() {
     local release="$1"
@@ -70,8 +68,10 @@ update_go_const() {
     local version="$2"
     local file="$3"
     if [ -f "$file" ]; then
-        sed_i "s/^\([[:space:]]*${const_name}[[:space:]]*=[[:space:]]*\)\"[^\"]*\"/\1\"$version\"/" "$file"
-        echo "Updated $const_name in $file to $version"
+        if grep -q "^[[:space:]]*${const_name}[[:space:]]*=" "$file"; then
+            sed_i "s/^\([[:space:]]*${const_name}[[:space:]]*=[[:space:]]*\)\"[^\"]*\"/\1\"$version\"/" "$file"
+            echo "Updated $const_name in $file to $version"
+        fi
     fi
 }
 
@@ -86,13 +86,14 @@ ensure_helm_repo "open-telemetry" "https://open-telemetry.github.io/opentelemetr
 
 check_file_exists "$OTEL_DEMO_VALUES_PATH"
 check_file_exists "$NR_K8S_VALUES_PATH"
+check_file_exists "$NRI_BUNDLE_VALUES_PATH"
 
 LATEST_OTEL_DEMO_CHART_VERSION=$(helm search repo open-telemetry/opentelemetry-demo --versions | awk 'NR==2 {print $2}')
 if [[ -z "$LATEST_OTEL_DEMO_CHART_VERSION" ]]; then
     echo "Failed to fetch latest opentelemetry-demo chart version from helm search."
     exit 1
 fi
-CURR_OTEL_DEMO_CHART_VERSION=$(cat $COMMON_SCRIPT_PATH | sed -n 's/^OTEL_DEMO_CHART_VERSION="\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)"$/\1/p')
+CURR_OTEL_DEMO_CHART_VERSION=$(cat "$COMMON_SCRIPT_PATH" | sed -n 's/^OTEL_DEMO_CHART_VERSION="\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)"$/\1/p')
 
 echo "Latest OpenTelemetry Demo chart version: $LATEST_OTEL_DEMO_CHART_VERSION"
 echo "Current OpenTelemetry Demo chart version: $CURR_OTEL_DEMO_CHART_VERSION"
@@ -141,7 +142,11 @@ else
 fi
 
 LATEST_NR_K8S_CHART_VERSION=$(helm search repo newrelic/nr-k8s-otel-collector --versions | awk 'NR==2 {print $2}')
-CURR_NR_K8S_CHART_VERSION=$(cat $COMMON_SCRIPT_PATH | sed -n 's/^NR_K8S_CHART_VERSION="\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)"$/\1/p')
+if [[ -z "$LATEST_NR_K8S_CHART_VERSION" ]]; then
+    echo "Failed to fetch latest nr-k8s-otel-collector chart version from helm search." >&2
+    exit 1
+fi
+CURR_NR_K8S_CHART_VERSION=$(cat "$COMMON_SCRIPT_PATH" | sed -n 's/^NR_K8S_CHART_VERSION="\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)"$/\1/p')
 
 echo "Latest New Relic K8s chart version: $LATEST_NR_K8S_CHART_VERSION"
 echo "Current New Relic K8s chart version: $CURR_NR_K8S_CHART_VERSION"
@@ -167,13 +172,43 @@ if [ "$NR_K8S_UPDATED" = true ] || [ "$CONTRIB_UPDATED" = true ]; then
   echo "Completed updating the New Relic K8s instrumentation!"
 fi
 
-if [ "$OTEL_DEMO_UPDATED" = false ] && [ "$NR_K8S_UPDATED" = false ] && [ "$CONTRIB_UPDATED" = false ]; then
+LATEST_NRI_BUNDLE_CHART_VERSION=$(helm search repo newrelic/nri-bundle --versions | awk 'NR==2 {print $2}')
+if [[ -z "$LATEST_NRI_BUNDLE_CHART_VERSION" ]]; then
+    echo "Failed to fetch latest nri-bundle chart version from helm search." >&2
+    exit 1
+fi
+CURR_NRI_BUNDLE_CHART_VERSION=$(cat "$COMMON_SCRIPT_PATH" | sed -n 's/^NRI_BUNDLE_CHART_VERSION="\([0-9]\{1,\}\.[0-9]\{1,\}\.[0-9]\{1,\}\)"$/\1/p')
+
+echo "Latest NRI Bundle chart version: $LATEST_NRI_BUNDLE_CHART_VERSION"
+echo "Current NRI Bundle chart version: $CURR_NRI_BUNDLE_CHART_VERSION"
+
+NRI_BUNDLE_UPDATED=false
+
+if [ "$LATEST_NRI_BUNDLE_CHART_VERSION" != "" ] && [ "$LATEST_NRI_BUNDLE_CHART_VERSION" != "$CURR_NRI_BUNDLE_CHART_VERSION" ]; then
+  echo "Updating nri-bundle chart to version $LATEST_NRI_BUNDLE_CHART_VERSION"
+  update_version_in_script "NRI_BUNDLE_CHART_VERSION" "$LATEST_NRI_BUNDLE_CHART_VERSION" "$COMMON_SCRIPT_PATH"
+  update_go_const "NriBundleChartVersion" "$LATEST_NRI_BUNDLE_CHART_VERSION" "$CONFIG_GO_PATH"
+  NRI_BUNDLE_UPDATED=true
+else
+  echo "NRI Bundle chart is up to date."
+fi
+
+if [ "$NRI_BUNDLE_UPDATED" = true ] || [ ! -f "$NRI_BUNDLE_RENDER_PATH" ]; then
+  NRI_BUNDLE_RENDER_VERSION="${LATEST_NRI_BUNDLE_CHART_VERSION:-$CURR_NRI_BUNDLE_CHART_VERSION}"
+  echo "Rendering nri-bundle chart (version $NRI_BUNDLE_RENDER_VERSION)"
+  template_chart "nri-bundle" "newrelic/nri-bundle" "$NRI_BUNDLE_RENDER_VERSION" "$NRI_BUNDLE_NAMESPACE" "$NRI_BUNDLE_VALUES_PATH" "$NRI_BUNDLE_RENDER_PATH"
+  echo "Completed updating the New Relic Infrastructure Bundle!"
+fi
+
+if [ "$OTEL_DEMO_UPDATED" = false ] && [ "$NR_K8S_UPDATED" = false ] && [ "$CONTRIB_UPDATED" = false ] && [ "$NRI_BUNDLE_UPDATED" = false ]; then
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "Dry run: skipping git and PR creation"
+    echo "Chart updates rendered successfully. Review changes with: git diff"
+    exit 0
+  fi
   echo "No updates were necessary. Charts are up to date."
   exit 0
 fi
-
-TARGET_REPO="${TARGET_REPO:-newrelic/opentelemetry-demo}"
-REPO_OWNER=$(parse_repo_owner)
 
 COMMIT_DESC=""
 BODY_DESC=""
@@ -189,6 +224,14 @@ if [ "$NR_K8S_UPDATED" = true ]; then
   fi
   COMMIT_DESC+="nr-k8s $LATEST_NR_K8S_CHART_VERSION"
   BODY_DESC+="* nr-k8s-otel-collector-$LATEST_NR_K8S_CHART_VERSION"$'\n'
+fi
+
+if [ "$NRI_BUNDLE_UPDATED" = true ]; then
+  if [ -n "$COMMIT_DESC" ]; then
+    COMMIT_DESC+=","
+  fi
+  COMMIT_DESC+="nri-bundle $LATEST_NRI_BUNDLE_CHART_VERSION"
+  BODY_DESC+="* nri-bundle-$LATEST_NRI_BUNDLE_CHART_VERSION"$'\n'
 fi
 
 if [ "$CONTRIB_UPDATED" = true ]; then
@@ -208,17 +251,20 @@ $BODY_DESC
 EOF
 )
 
+if [[ "$DRY_RUN" == true ]]; then
+  echo "Dry run: skipping git and PR creation"
+  echo "Chart updates rendered successfully. Review changes with: git diff"
+  exit 0
+fi
+
+TARGET_REPO="${TARGET_REPO:-newrelic/opentelemetry-demo}"
+REPO_OWNER=$(parse_repo_owner)
+
 # Skip creating a new PR if an open chart-update PR already exists
 EXISTING_PR=$(gh pr list --state open --repo "$TARGET_REPO" --base main \
   --json number,headRefName --jq '.[] | select(.headRefName | startswith("chore/update-charts_")) | .number' | head -1)
 if [ -n "$EXISTING_PR" ]; then
   echo "An open chart update PR already exists (#$EXISTING_PR). Skipping creation of a new PR."
-  exit 0
-fi
-
-if [[ "$DRY_RUN" == true ]]; then
-  echo "Dry run: skipping git and PR creation"
-  echo "Chart updates rendered successfully. Review changes with: git diff"
   exit 0
 fi
 
@@ -231,14 +277,12 @@ else
   exit 0
 fi
 
-gh pr create --head "$REPO_OWNER:chore/update-charts_$TS" \
+if ! gh pr create --head "$REPO_OWNER:chore/update-charts_$TS" \
   --title "$COMMIT_MSG" \
   --body "$PR_BODY" \
   --base main \
-  --repo $TARGET_REPO
-
-if [ $? -ne 0 ]; then
-  echo "create pull request against $TARGET_REPO failed"
+  --repo "$TARGET_REPO"; then
+  echo "create pull request against $TARGET_REPO failed" >&2
   exit 1
 else
   echo "pull request for chart updates created successfully against $TARGET_REPO"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -47,9 +48,33 @@ func generateBrowserYaml(cfg *Config) {
 		fmt.Printf("Error: Template file not found at %s.tmpl\n", yamlPath)
 		return
 	}
-	outFile, _ := os.Create(yamlPath)
+	outFile, err := os.Create(yamlPath)
+	if err != nil {
+		fmt.Printf("Error creating %s: %v\n", yamlPath, err)
+		return
+	}
 	defer outFile.Close()
 	tmpl.Execute(outFile, data)
+}
+
+// applyLicenseSecret applies the license secret idempotently to a namespace,
+// matching the behavior of install-k8s.sh.
+func applyLicenseSecret(namespace, licenseKey string) {
+	createCmd := exec.Command("kubectl", "create", "secret", "generic", "newrelic-license-key",
+		"--from-literal=license-key="+licenseKey, "-n", namespace, "--dry-run=client", "-o", "yaml")
+	out, err := createCmd.Output()
+	if err != nil {
+		fmt.Printf("Error generating secret manifest: %v\n", err)
+		os.Exit(1)
+	}
+	applyCmd := exec.Command("kubectl", "apply", "-f", "-")
+	applyCmd.Stdin = bytes.NewReader(out)
+	applyCmd.Stdout = os.Stdout
+	applyCmd.Stderr = os.Stderr
+	if err := applyCmd.Run(); err != nil {
+		fmt.Printf("Error applying license secret: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // handleK8s manages the Kubernetes installation, upgrade, and uninstallation workflows.
@@ -58,9 +83,32 @@ func handleK8s(action string, cfg *Config) {
 	ns := Charts["otel-demo"].NS
 
 	if action == "uninstall" {
-		runCommand("helm", []string{"uninstall", Charts["otel-demo"].Name, "-n", ns}, nil)
-		runCommand("helm", []string{"uninstall", Charts["nr-k8s"].Name, "-n", ns}, nil)
-		runCommand("kubectl", []string{"delete", "ns", ns}, nil)
+		uninstallRelease := func(name, namespace string, wait bool) {
+			statusCmd := exec.Command("helm", "status", name, "-n", namespace)
+			if err := statusCmd.Run(); err != nil {
+				return
+			}
+			args := []string{"uninstall", name, "-n", namespace}
+			if wait {
+				args = append(args, "--wait")
+			}
+			runCommand("helm", args, nil)
+		}
+
+		uninstallRelease(Charts["otel-demo"].Name, ns, false)
+		uninstallRelease(Charts["nr-k8s"].Name, ns, false)
+		// --wait so nri-bundle's cluster-scoped MutatingWebhookConfiguration is
+		// gone before the namespace holding its Service is deleted; an orphaned
+		// webhook stalls pod admission cluster-wide on later installs.
+		nriNS := Charts["nri-bundle"].NS
+		uninstallRelease(Charts["nri-bundle"].Name, nriNS, true)
+		exec.Command("kubectl", "delete",
+			"mutatingwebhookconfiguration,validatingwebhookconfiguration,clusterrole,clusterrolebinding",
+			"-l", "app.kubernetes.io/instance="+Charts["nri-bundle"].Name, "--ignore-not-found").Run()
+		runCommand("kubectl", []string{"delete", "ns", ns, "--ignore-not-found"}, nil)
+		if nriNS != ns {
+			runCommand("kubectl", []string{"delete", "ns", nriNS, "--ignore-not-found"}, nil)
+		}
 		return
 	}
 
@@ -72,10 +120,8 @@ func handleK8s(action string, cfg *Config) {
 			cfg.Target = "browser"
 			handleTerraform("install", cfg)
 			cfg.Target = oldTarget
-			generateBrowserYaml(cfg)
-		} else {
-			generateBrowserYaml(cfg)
 		}
+		generateBrowserYaml(cfg)
 	}
 
 	runCommand("helm", []string{"repo", "add", "newrelic", "https://helm-charts.newrelic.com"}, nil)
@@ -84,17 +130,46 @@ func handleK8s(action string, cfg *Config) {
 
 	detectOpenShift()
 	exec.Command("kubectl", "create", "ns", ns).Run()
+	applyLicenseSecret(ns, cfg.LicenseKey)
 
-	exec.Command("kubectl", "delete", "secret", "newrelic-license-key", "-n", ns).Run()
-	runCommand("kubectl", []string{"create", "secret", "generic", "newrelic-license-key", "--from-literal=license-key=" + cfg.LicenseKey, "-n", ns}, nil)
+	if cfg.EnableNrdot == nil || *cfg.EnableNrdot {
+		installChart("nr-k8s", []string{Paths["nr-k8s-values"]}, "global.region="+strings.ToLower(cfg.Region))
+	}
 
-	installChart("nr-k8s", []string{Paths["nr-k8s-values"]}, "global.region="+strings.ToLower(cfg.Region))
+	if cfg.EnableNriBundle != nil && *cfg.EnableNriBundle {
+		nriNS := Charts["nri-bundle"].NS
+		exec.Command("kubectl", "create", "ns", nriNS).Run()
+		applyLicenseSecret(nriNS, cfg.LicenseKey)
+		installChart("nri-bundle", []string{Paths["nri-bundle-values"]}, "global.region="+strings.ToLower(cfg.Region))
+	}
 
 	otelValues := []string{Paths["otel-values"]}
 	if cfg.EnableBrowser != nil && *cfg.EnableBrowser {
 		otelValues = append(otelValues, Paths["otel-browser-values"])
 	}
-	installChart("otel-demo", otelValues)
+	otelSets := []string{}
+	if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
+		otelValues = append(otelValues, Paths["otel-nri-values"])
+		otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
+	}
+	installChart("otel-demo", otelValues, otelSets...)
+}
+
+// otlpEndpoint resolves the New Relic OTLP endpoint the demo's own collector
+// exports to. One knob for both region selection and routing through a
+// Pipeline Control gateway.
+func otlpEndpoint(cfg *Config) string {
+	if cfg.OtlpEndpoint != "" {
+		return cfg.OtlpEndpoint
+	}
+	switch strings.ToLower(cfg.Region) {
+	case "eu":
+		return "https://otlp.eu01.nr-data.net:4318"
+	case "jp":
+		return "https://otlp.jp01.nr-data.net:4318"
+	default:
+		return "https://otlp.nr-data.net:4318"
+	}
 }
 
 // installChart executes the helm upgrade --install command for a given chart.
@@ -122,8 +197,8 @@ func installChart(key string, values []string, extraSets ...string) {
 // detectOpenShift checks the cluster for OpenShift-specific API versions.
 func detectOpenShift() {
 	out, err := exec.Command("kubectl", "api-versions").Output()
-	if err == nil && strings.Contains(string(out), "security.openshift.io") {
-		isOpenShift = true
+	isOpenShift = (err == nil && strings.Contains(string(out), "security.openshift.io"))
+	if isOpenShift {
 		fmt.Println("OpenShift detected.")
 	}
 }

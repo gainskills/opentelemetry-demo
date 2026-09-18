@@ -7,7 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: opentelemetry-collector
     app.kubernetes.io/instance: opentelemetry-demo
-    app.kubernetes.io/version: "0.135.0"
+    app.kubernetes.io/version: "0.161.0"
     app.kubernetes.io/part-of: opentelemetry-collector
     app.kubernetes.io/component: standalone-collector
 spec:
@@ -43,7 +43,7 @@ spec:
             - --config=/conf/relay.yaml
           securityContext:
             {}
-          image: "otel/opentelemetry-collector-contrib:0.135.0"
+          image: "otel/opentelemetry-collector-contrib:0.161.0"
           imagePullPolicy: IfNotPresent
           ports:
             
@@ -127,7 +127,7 @@ data:
     processors:
       batch: {}
       
-      # 1. Global Pattern Redaction (Bypasses OTTL Entirely, Built for v0.135.0)
+      # 1. Global Pattern Redaction (Bypasses OTTL Entirely)
       redaction:
         allow_all_keys: true
         blocked_values:
@@ -140,7 +140,7 @@ data:
           # Expiry Regex Pattern
           - "(?i)\\b(exp(iry|iration)?|valid[ _-]?thru)\\b\\s*[:=]?\\s*(0[1-9]|1[0-2])[/-](\\d{2}|\\d{4})\\b"
 
-      # 2. Precise Attribute Value Scrubbing (Built for v0.135.0)
+      # 2. Precise Attribute Value Scrubbing
       attributes/pii-clean:
         actions:
           - key: app.payment.card_number
