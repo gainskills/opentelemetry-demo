@@ -31,6 +31,7 @@ var (
 		"otel-values":         filepath.Join("..", "k8s", "helm", "opentelemetry-demo.yaml"),
 		"otel-browser-values": filepath.Join("..", "k8s", "helm", "nr-browser.yaml"),
 		"otel-nri-values":     filepath.Join("..", "k8s", "helm", "opentelemetry-demo-nri-collector.yaml"),
+		"otel-gateway-manifest": filepath.Join("..", "k8s", "otel-collector-gateway.yaml"),
 		"nr-k8s-values":       filepath.Join("..", "k8s", "helm", "nr-k8s-otel-collector.yaml"),
 		"nri-bundle-values":   filepath.Join("..", "k8s", "helm", "nri-bundle.yaml"),
 		"docker-compose":      filepath.Join("..", "docker", "docker-compose.yml"),
@@ -53,6 +54,7 @@ type Config struct {
 	EnableNrdot                                                                        *bool
 	EnableNriBundle                                                                    *bool
 	EnableDemoOtelCollector                                                            *bool
+	EnableOtelGateway                                                                  *bool
 	OtlpEndpoint                                                                       string
 	SubAccountId                                                                       string
 	ParentAccountId                                                                    string
@@ -182,6 +184,12 @@ func loadConfig(cfg *Config) {
 			cfg.EnableDemoOtelCollector = &b
 		}
 	}
+	if cfg.EnableOtelGateway == nil {
+		if envVal := os.Getenv("ENABLE_OTEL_GATEWAY"); envVal != "" {
+			b := strings.ToLower(envVal) == "y" || strings.ToLower(envVal) == "true"
+			cfg.EnableOtelGateway = &b
+		}
+	}
 
 	if cfg.OtlpEndpoint == "" {
 		cfg.OtlpEndpoint = os.Getenv("NEW_RELIC_OTLP_ENDPOINT")
@@ -210,12 +218,19 @@ func loadConfig(cfg *Config) {
 		}
 		if cfg.EnableDemoOtelCollector == nil {
 			if !*cfg.EnableNrdot {
-				enable := promptBoolWithDefault("NRDOT is disabled. Enable the demo's own OpenTelemetry Collector to export app telemetry to New Relic?", true)
+				enable := promptBoolWithDefault("NRDOT is disabled. Deploy pure OpenTelemetry Collector architecture?", true)
 				cfg.EnableDemoOtelCollector = &enable
+				if cfg.EnableOtelGateway == nil {
+					cfg.EnableOtelGateway = &enable
+				}
 			} else {
 				f := false
 				cfg.EnableDemoOtelCollector = &f
 			}
+		}
+		if cfg.EnableOtelGateway == nil {
+			f := false
+			cfg.EnableOtelGateway = &f
 		}
 		if !*cfg.EnableNrdot && !*cfg.EnableDemoOtelCollector {
 			fmt.Println(ColorYellow + "Warning: no collector enabled. The demo's services will export telemetry to an endpoint that does not exist and no application data will reach New Relic." + ColorReset)

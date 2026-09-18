@@ -11,6 +11,8 @@ global:
   customAttributes:
     demo.telemetry.source: nri-bundle
 
+# DaemonSet: Scrapes node hardware metrics (CPU, RAM, disk from /proc and /sys) and node metadata.
+# Set enabled: false if testing pure deployment-mode monitoring without host DaemonSets.
 newrelic-infrastructure:
   enabled: true
   enableLinux: true
@@ -76,9 +78,9 @@ kube-state-metrics:
     # - replicasets
     # - endpointslices
 
-# Tails every container log on every node. When the demo apps also export logs
-# over OTLP (via NRDOT or the demo's own collector), each app log line reaches
-# New Relic twice.
+# DaemonSet: Tails container log files (/var/log/pods/*.log) directly from each worker node's disk.
+# Note: When demo apps or OTel collectors also export logs over OTLP, each log line reaches New Relic twice.
+# Set enabled: false if testing pure deployment-mode monitoring without host DaemonSets.
 newrelic-logging:
   enabled: true
   enableLinux: true
@@ -90,8 +92,14 @@ newrelic-logging:
 nri-prometheus:
   enabled: false
 
+# Kubernetes Event Watcher (Deployment):
+# DISABLED (enabled: false) to eliminate duplicate event collection when running alongside
+# the OpenTelemetry Collector Deployment (otel-collector-gateway.yaml).
+# The OTel Collector's k8s_events receiver watches the K8s API server and exports Warning
+# events as Log records. If nri-kube-events is enabled here, every cluster event is
+# captured twice: once by NRI (InfrastructureEvent) and once by OTel (Log).
 nri-kube-events:
-  enabled: true
+  enabled: false
 
 newrelic-pixie:
   enabled: false

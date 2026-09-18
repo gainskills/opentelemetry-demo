@@ -50,7 +50,15 @@ template_chart() {
     local namespace="$4"
     local values="$5"
     local output="$6"
-    helm template "$release" "$chart" --version "$version" -n "$namespace" --create-namespace -f "$values" > "$output"
+    local tmp
+    tmp=$(mktemp)
+    helm template "$release" "$chart" --version "$version" -n "$namespace" --create-namespace -f "$values" > "$tmp"
+    if [ ! -f "$output" ] || ! cmp -s "$tmp" "$output"; then
+        mv "$tmp" "$output"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
 }
 
 update_version_in_script() {
@@ -102,13 +110,17 @@ OTEL_DEMO_UPDATED=false
 
 if [ "$LATEST_OTEL_DEMO_CHART_VERSION" != "$CURR_OTEL_DEMO_CHART_VERSION" ]; then
   echo "Updating opentelemetry-demo chart to version $LATEST_OTEL_DEMO_CHART_VERSION"
-  template_chart "otel-demo" "open-telemetry/opentelemetry-demo" "$LATEST_OTEL_DEMO_CHART_VERSION" "opentelemetry-demo" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_RENDER_PATH"
   update_version_in_script "OTEL_DEMO_CHART_VERSION" "$LATEST_OTEL_DEMO_CHART_VERSION" "$COMMON_SCRIPT_PATH"
   update_go_const "OtelDemoChartVersion" "$LATEST_OTEL_DEMO_CHART_VERSION" "$CONFIG_GO_PATH"
-  echo "Completed updating the OpenTelemetry Demo app!"
   OTEL_DEMO_UPDATED=true
 else
   echo "opentelemetry-demo chart is up to date."
+fi
+
+OTEL_DEMO_RENDER_VERSION="${LATEST_OTEL_DEMO_CHART_VERSION:-$CURR_OTEL_DEMO_CHART_VERSION}"
+if template_chart "otel-demo" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_RENDER_VERSION" "opentelemetry-demo" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_RENDER_PATH"; then
+  echo "Completed updating the OpenTelemetry Demo manifest!"
+  OTEL_DEMO_UPDATED=true
 fi
 
 # Sync the opentelemetry-collector-contrib version used by the NR K8s collector and
@@ -135,7 +147,10 @@ if [ "$CONTRIB_VERSION" != "$CURR_CONTRIB_VERSION" ]; then
   # and formatting.
   sed_i '/repository: otel\/opentelemetry-collector-contrib/{n;s/tag: .*/tag: "'"$CONTRIB_VERSION"'"/;}' "$NR_K8S_VALUES_PATH"
   sed_i "s#\(COLLECTOR_CONTRIB_IMAGE=.*opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION#" "$ENV_PATH"
-  echo "Updated images.collector.tag in $NR_K8S_VALUES_PATH and COLLECTOR_CONTRIB_IMAGE in $ENV_PATH"
+  if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
+    sed_i "s#\(image: \"otel/opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION\"#" "$OTEL_GATEWAY_MANIFEST_PATH"
+  fi
+  echo "Updated images.collector.tag in $NR_K8S_VALUES_PATH, COLLECTOR_CONTRIB_IMAGE in $ENV_PATH, and $OTEL_GATEWAY_MANIFEST_PATH"
   CONTRIB_UPDATED=true
 else
   echo "opentelemetry-collector-contrib version is already in sync."
@@ -162,14 +177,10 @@ else
   echo "NR K8s chart is up to date."
 fi
 
-# Re-render the NR K8s manifest when the chart version changed OR the contrib tag changed.
-# The render is gated on a values change too (not just a chart bump) so that an updated
-# images.collector.tag actually lands in the rendered manifest.
-if [ "$NR_K8S_UPDATED" = true ] || [ "$CONTRIB_UPDATED" = true ]; then
-  NR_K8S_RENDER_VERSION="${LATEST_NR_K8S_CHART_VERSION:-$CURR_NR_K8S_CHART_VERSION}"
-  echo "Rendering nr-k8s-otel-collector chart (version $NR_K8S_RENDER_VERSION)"
-  template_chart "nr-k8s-otel-collector" "newrelic/nr-k8s-otel-collector" "$NR_K8S_RENDER_VERSION" "opentelemetry-demo" "$NR_K8S_VALUES_PATH" "$NR_K8S_RENDER_PATH"
-  echo "Completed updating the New Relic K8s instrumentation!"
+NR_K8S_RENDER_VERSION="${LATEST_NR_K8S_CHART_VERSION:-$CURR_NR_K8S_CHART_VERSION}"
+if template_chart "nr-k8s-otel-collector" "newrelic/nr-k8s-otel-collector" "$NR_K8S_RENDER_VERSION" "opentelemetry-demo" "$NR_K8S_VALUES_PATH" "$NR_K8S_RENDER_PATH"; then
+  echo "Completed updating the New Relic K8s instrumentation manifest!"
+  NR_K8S_UPDATED=true
 fi
 
 LATEST_NRI_BUNDLE_CHART_VERSION=$(helm search repo newrelic/nri-bundle --versions | awk 'NR==2 {print $2}')
@@ -193,17 +204,22 @@ else
   echo "NRI Bundle chart is up to date."
 fi
 
-if [ "$NRI_BUNDLE_UPDATED" = true ] || [ ! -f "$NRI_BUNDLE_RENDER_PATH" ]; then
-  NRI_BUNDLE_RENDER_VERSION="${LATEST_NRI_BUNDLE_CHART_VERSION:-$CURR_NRI_BUNDLE_CHART_VERSION}"
-  echo "Rendering nri-bundle chart (version $NRI_BUNDLE_RENDER_VERSION)"
-  template_chart "nri-bundle" "newrelic/nri-bundle" "$NRI_BUNDLE_RENDER_VERSION" "$NRI_BUNDLE_NAMESPACE" "$NRI_BUNDLE_VALUES_PATH" "$NRI_BUNDLE_RENDER_PATH"
-  echo "Completed updating the New Relic Infrastructure Bundle!"
+NRI_BUNDLE_RENDER_VERSION="${LATEST_NRI_BUNDLE_CHART_VERSION:-$CURR_NRI_BUNDLE_CHART_VERSION}"
+if template_chart "nri-bundle" "newrelic/nri-bundle" "$NRI_BUNDLE_RENDER_VERSION" "$NRI_BUNDLE_NAMESPACE" "$NRI_BUNDLE_VALUES_PATH" "$NRI_BUNDLE_RENDER_PATH"; then
+  echo "Completed updating the New Relic Infrastructure Bundle manifest!"
+  NRI_BUNDLE_UPDATED=true
+fi
+
+if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
+  echo "Validating Standalone OTel Collector Gateway manifest syntax..."
+  kubectl apply --dry-run=client -f "$OTEL_GATEWAY_MANIFEST_PATH" > /dev/null
+  echo "✓ OTel Gateway manifest is valid"
 fi
 
 if [ "$OTEL_DEMO_UPDATED" = false ] && [ "$NR_K8S_UPDATED" = false ] && [ "$CONTRIB_UPDATED" = false ] && [ "$NRI_BUNDLE_UPDATED" = false ]; then
   if [[ "$DRY_RUN" == true ]]; then
     echo "Dry run: skipping git and PR creation"
-    echo "Chart updates rendered successfully. Review changes with: git diff"
+    echo "No updates were necessary. Charts are up to date."
     exit 0
   fi
   echo "No updates were necessary. Charts are up to date."

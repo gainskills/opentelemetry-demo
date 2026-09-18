@@ -54,6 +54,8 @@ default:
 
 opentelemetry-collector:
   enabled: true
+  service:
+    internalTrafficPolicy: Local
   extraEnvs:
     - name: NEW_RELIC_LICENSE_KEY
       valueFrom:
@@ -69,28 +71,30 @@ opentelemetry-collector:
         endpoint: https://otlp.nr-data.net:4318
         headers:
           api-key: ${env:NEW_RELIC_LICENSE_KEY}
+      # Two-Tier architecture: forwards telemetry to the standalone otel-gateway
+      # deployed via newrelic/k8s/otel-collector-gateway.yaml.
+      otlp/gateway:
+        endpoint: otel-gateway.opentelemetry-demo.svc.cluster.local:4317
+        tls:
+          insecure: true
     service:
       pipelines:
-        # Each exporter list re-declares the chart defaults plus New Relic, so
-        # the demo's in-cluster backends (Jaeger, Prometheus, OpenSearch) and
-        # the span_metrics connector keep working in this mode.
-        #
-        # This collector's metrics pipeline also carries the chart's own
-        # hostmetrics, kubeletstats and k8s_cluster receivers, so running it
-        # alongside nri-bundle reports cluster and host telemetry from both.
+        # Forward telemetry to otel-gateway, while preserving the demo's
+        # in-cluster backends (Jaeger, Prometheus, OpenSearch) and the
+        # span_metrics connector.
         traces:
           exporters:
-            - otlphttp/newrelic
+            - otlp/gateway
             - otlp_grpc/jaeger
             - debug
             - span_metrics
         metrics:
           exporters:
-            - otlphttp/newrelic
+            - otlp/gateway
             - otlp_http/prometheus
             - debug
         logs:
           exporters:
-            - otlphttp/newrelic
+            - otlp/gateway
             - opensearch
             - debug

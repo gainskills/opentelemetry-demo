@@ -3,8 +3,8 @@ set -euo pipefail
 
 source "$(dirname "$0")/common.sh"
 
-NR_K8S_VALUES_PATH="${NR_K8S_VALUES_PATH:-newrelic/k8s/helm/nr-k8s-otel-collector.yaml}"
-NR_K8S_RENDERED_PATH="${NR_K8S_RENDERED_PATH:-newrelic/k8s/rendered/nr-k8s-otel-collector.yaml}"
+NR_K8S_VALUES_PATH="${NR_K8S_VALUES_PATH}"
+NR_K8S_RENDERED_PATH="${NR_K8S_RENDER_PATH}"
 
 # Policy: these must always exist in the rendered config, regardless of what
 # extraConfig currently declares. Unlike the generic extraConfig check below
@@ -252,8 +252,8 @@ fi
 OVERLAY_COLLECTOR_CONFIG=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "otel-collector-agent") | .data | to_entries | .[0].value' "$OVERLAY_RENDER")
 for pipeline in traces metrics logs; do
     EXPORTERS=$(yq -r ".service.pipelines.$pipeline.exporters[]" <<< "$OVERLAY_COLLECTOR_CONFIG")
-    if ! grep -qx "otlphttp/newrelic" <<< "$EXPORTERS"; then
-        echo "ERROR: overlay $pipeline pipeline does not export to otlphttp/newrelic"
+    if ! grep -Eq "^(otlphttp/newrelic|otlp/gateway)$" <<< "$EXPORTERS"; then
+        echo "ERROR: overlay $pipeline pipeline does not export to otlphttp/newrelic or otlp/gateway"
         exit 1
     fi
 done

@@ -105,6 +105,9 @@ func handleK8s(action string, cfg *Config) {
 		exec.Command("kubectl", "delete",
 			"mutatingwebhookconfiguration,validatingwebhookconfiguration,clusterrole,clusterrolebinding",
 			"-l", "app.kubernetes.io/instance="+Charts["nri-bundle"].Name, "--ignore-not-found").Run()
+		if _, err := os.Stat(Paths["otel-gateway-manifest"]); err == nil {
+			runCommand("kubectl", []string{"delete", "-f", Paths["otel-gateway-manifest"], "--ignore-not-found"}, nil)
+		}
 		runCommand("kubectl", []string{"delete", "ns", ns, "--ignore-not-found"}, nil)
 		if nriNS != ns {
 			runCommand("kubectl", []string{"delete", "ns", nriNS, "--ignore-not-found"}, nil)
@@ -153,6 +156,12 @@ func handleK8s(action string, cfg *Config) {
 		otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
 	}
 	installChart("otel-demo", otelValues, otelSets...)
+
+	if cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway {
+		fmt.Println("\n>>> Installing Standalone OpenTelemetry Collector Gateway...")
+		runCommand("kubectl", []string{"apply", "-f", Paths["otel-gateway-manifest"]}, nil)
+		fmt.Printf("  To stream Gateway events: kubectl logs -f -n %s deployment/otel-gateway\n", ns)
+	}
 }
 
 // otlpEndpoint resolves the New Relic OTLP endpoint the demo's own collector

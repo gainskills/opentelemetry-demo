@@ -32,6 +32,7 @@ NR_K8S_RENDER_PATH=${NR_K8S_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nr-k8s-ote
 NRI_BUNDLE_VALUES_PATH=${NRI_BUNDLE_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/nri-bundle.yaml"}
 NRI_BUNDLE_RENDER_PATH=${NRI_BUNDLE_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nri-bundle.yaml"}
 OTEL_DEMO_NRI_VALUES_PATH=${OTEL_DEMO_NRI_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/opentelemetry-demo-nri-collector.yaml"}
+OTEL_GATEWAY_MANIFEST_PATH=${OTEL_GATEWAY_MANIFEST_PATH:-"$SCRIPT_DIR/../k8s/otel-collector-gateway.yaml"}
 CONFIG_GO_PATH=${CONFIG_GO_PATH:-"$SCRIPT_DIR/../cli/config.go"}
 
 # Docker variables
@@ -215,13 +216,16 @@ prompt_for_k8s_monitoring_components() {
   fi
 
   if [ "$ENABLE_NRDOT" = "n" ]; then
-    prompt_for_env_var "ENABLE_DEMO_OTEL_COLLECTOR" "NRDOT is disabled. Enable the demo's own OpenTelemetry Collector to export app telemetry to New Relic? (y/n, default: y)" false
+    prompt_for_env_var "ENABLE_DEMO_OTEL_COLLECTOR" "NRDOT is disabled. Deploy pure OpenTelemetry Collector architecture? (y/n, default: y)" false
     if [ -z "${ENABLE_DEMO_OTEL_COLLECTOR:-}" ]; then
       export ENABLE_DEMO_OTEL_COLLECTOR="y"
     fi
     validate_yesno_answer "ENABLE_DEMO_OTEL_COLLECTOR"
+
+    export ENABLE_OTEL_GATEWAY="${ENABLE_OTEL_GATEWAY:-$ENABLE_DEMO_OTEL_COLLECTOR}"
   else
     export ENABLE_DEMO_OTEL_COLLECTOR="${ENABLE_DEMO_OTEL_COLLECTOR:-n}"
+    export ENABLE_OTEL_GATEWAY="${ENABLE_OTEL_GATEWAY:-n}"
   fi
 
   if [ "$ENABLE_NRDOT" = "n" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "n" ]; then

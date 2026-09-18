@@ -458,7 +458,6 @@ components:
           - name: patched-script
             mountPath: /patched
 
-
   frontend-proxy:
     additionalVolumes:
       - name: patched-envoy-config

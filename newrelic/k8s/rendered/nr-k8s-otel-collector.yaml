@@ -28,6 +28,7 @@ metadata:
     app.kubernetes.io/version: 1.19.0
     helm.sh/chart: nr-k8s-otel-collector-0.14.2
   annotations:
+    
 ---
 # Source: nr-k8s-otel-collector/templates/daemonset-configmap.yaml
 apiVersion: v1
@@ -819,7 +820,14 @@ data:
         timeout: 30s
         send_batch_size : 800
       
-      
+      filter/k8s_events:
+        error_mode: ignore
+        logs:
+          log_record:
+          - attributes["k8s.event.name"] != nil and severity_number < SEVERITY_NUMBER_WARN
+          - attributes["k8s.namespace.name"] == "kube-system"
+          - attributes["k8s.namespace.name"] == "kube-public"
+          - attributes["k8s.namespace.name"] == "kube-node-lease"
 
     exporters:
       otlp_http/newrelic:
@@ -1000,7 +1008,7 @@ data:
           receivers:
             - file_log
           processors:
-            
+            - filter/k8s_events
           exporters:
             - routing/nr_logs_pipelines
             
@@ -1024,6 +1032,8 @@ data:
             - batch
           exporters:
             - otlp_http/newrelic
+            
+
 ---
 # Source: nr-k8s-otel-collector/templates/deployment-configmap.yaml
 apiVersion: v1
@@ -1837,7 +1847,14 @@ data:
           statements:
           - set(metric.description, "")
           - set(metric.unit, "")
-      
+      filter/k8s_events:
+        error_mode: ignore
+        logs:
+          log_record:
+          - attributes["k8s.event.name"] != nil and severity_number < SEVERITY_NUMBER_WARN
+          - attributes["k8s.namespace.name"] == "kube-system"
+          - attributes["k8s.namespace.name"] == "kube-public"
+          - attributes["k8s.namespace.name"] == "kube-node-lease"
 
     exporters:
       otlp_http/newrelic:
@@ -2069,7 +2086,7 @@ data:
           receivers:
             - k8s_events
           processors:
-            
+            - filter/k8s_events
           exporters:
             - routing/nr_logs_pipelines
             
@@ -2091,6 +2108,8 @@ data:
             - batch
           exporters:
             - otlp_http/newrelic
+            
+
 ---
 # Source: nr-k8s-otel-collector/charts/kube-state-metrics/templates/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -2246,6 +2265,8 @@ rules:
   resources:
     - volumeattachments
   verbs: ["list", "watch"]
+
+
 ---
 # Source: nr-k8s-otel-collector/templates/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -2398,6 +2419,7 @@ spec:
   selector:    
     app.kubernetes.io/name: kube-state-metrics
     app.kubernetes.io/instance: nr-k8s-otel-collector
+
 ---
 # Source: nr-k8s-otel-collector/templates/service.yaml
 apiVersion: v1
@@ -2427,6 +2449,7 @@ spec:
     app.kubernetes.io/name: nr-k8s-otel-collector
     component: deployment
   internalTrafficPolicy: Cluster
+
 ---
 # Source: nr-k8s-otel-collector/templates/daemonset.yaml
 apiVersion: apps/v1
@@ -2453,7 +2476,7 @@ spec:
         app.kubernetes.io/name: nr-k8s-otel-collector
         component: daemonset
       annotations:
-        checksum/config: b9f7ef1b033fda648cbb78766b8668544af39e39d3599869f3bbcc1908be285a
+        checksum/config: 88c2f4c135da4f468c424e62bccdefcb475445d798fd0f82e3c658475cb8c21b
     spec:
       serviceAccountName: nr-k8s-otel-collector
       initContainers:
@@ -2621,6 +2644,7 @@ spec:
         - name: daemonset-config
           configMap:
             name: nr-k8s-otel-collector-daemonset-config
+
 ---
 # Source: nr-k8s-otel-collector/charts/kube-state-metrics/templates/deployment.yaml
 apiVersion: apps/v1
@@ -2709,6 +2733,7 @@ spec:
             drop:
             - ALL
           readOnlyRootFilesystem: true
+
 ---
 # Source: nr-k8s-otel-collector/templates/deployment.yaml
 apiVersion: apps/v1
@@ -2737,7 +2762,7 @@ spec:
         app.kubernetes.io/name: nr-k8s-otel-collector
         component: deployment
       annotations:
-        checksum/config: 3978f4ab0ff15485be9339b13011633379ad25ae0b0c1649c98cffbbacd93051
+        checksum/config: e7f9c26e30b585368c5d349191d1c8b6a7ef50454cc788c732d4e485b8aa720c
     spec:
       serviceAccountName: nr-k8s-otel-collector
       containers:

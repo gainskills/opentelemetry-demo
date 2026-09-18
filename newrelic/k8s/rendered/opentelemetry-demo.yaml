@@ -6,11 +6,10 @@ metadata:
   name: otel-demo
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
-    
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/part-of: opentelemetry-demo
     app.kubernetes.io/managed-by: Helm
+
 ---
 # Source: opentelemetry-demo/templates/agent-fixtures-config.yaml
 apiVersion: v1
@@ -20,17 +19,14 @@ metadata:
   namespace: opentelemetry-demo
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
-    
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/part-of: opentelemetry-demo
     app.kubernetes.io/managed-by: Helm
 data:
-  
   azure_gpt-5.5_cassette.yaml: |
     # Copyright The OpenTelemetry Authors
     # SPDX-License-Identifier: Apache-2.0
-  
+
     interactions:
     - request:
         body: '{"messages": [{"content": "You are a helpful assistant. Be concise and
@@ -939,7 +935,7 @@ data:
   claude-opus-4-7_cassette.yaml: |
     # Copyright The OpenTelemetry Authors
     # SPDX-License-Identifier: Apache-2.0
-  
+
     interactions:
     - request:
         body: '{"messages": [{"content": "You are a helpful assistant. Be concise and
@@ -1853,6 +1849,7 @@ data:
           code: 200
           message: OK
     version: 1
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -1861,9 +1858,9 @@ metadata:
   name: product-catalog-product-catalog-otel-config
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: product-catalog
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: product-catalog
     app.kubernetes.io/name: product-catalog
@@ -1898,6 +1895,7 @@ data:
         - baggage:
     resource:
       attributes_list: ${OTEL_RESOURCE_ATTRIBUTES}
+
 ---
 # Source: opentelemetry-demo/templates/flagd-config.yaml
 apiVersion: v1
@@ -1907,13 +1905,11 @@ metadata:
   namespace: opentelemetry-demo
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/part-of: opentelemetry-demo
     app.kubernetes.io/managed-by: Helm
 data:
-  
   demo.flagd.json: |
     {
       "$schema": "https://flagd.dev/schema/v0/flags.json",
@@ -2087,6 +2083,7 @@ data:
         }
       }
     }
+
 ---
 # Source: opentelemetry-demo/templates/posgresql-init-config.yaml
 apiVersion: v1
@@ -2096,45 +2093,43 @@ metadata:
   namespace: opentelemetry-demo
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/part-of: opentelemetry-demo
     app.kubernetes.io/managed-by: Helm
 data:
-  
   init.sql: |
     -- Copyright The OpenTelemetry Authors
     -- SPDX-License-Identifier: Apache-2.0
-  
+
     -- Enable pg_stat_statements in the default postgres database
     CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-  
+
     -- Create application user
     CREATE USER astronomy_user WITH PASSWORD 'astronomy_password';
-  
+
     -- Create application database
     CREATE DATABASE astronomy_db OWNER astronomy_user;
-  
+
     -- Create monitoring user with pg_monitor role (visibility on all databases and schemas)
     CREATE USER monitoring_user WITH PASSWORD 'monitoring_password';
     GRANT pg_monitor TO monitoring_user;
-  
+
     -- Switch to the application database
     \connect astronomy_db
-  
+
     -- Enable pg_stat_statements in the application database
     CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-  
+
     -- Accounting Service: create a schema
     CREATE SCHEMA accounting;
     GRANT USAGE ON SCHEMA accounting TO astronomy_user;
-  
+
     -- Accounting Service: create tables
     CREATE TABLE accounting."order" (
         order_id TEXT PRIMARY KEY
     );
-  
+
     CREATE TABLE accounting.shipping (
         shipping_tracking_id TEXT PRIMARY KEY,
         shipping_cost_currency_code TEXT NOT NULL,
@@ -2148,7 +2143,7 @@ data:
         order_id TEXT NOT NULL,
         FOREIGN KEY (order_id) REFERENCES accounting."order"(order_id) ON DELETE CASCADE
     );
-  
+
     CREATE TABLE accounting.orderitem (
         item_cost_currency_code TEXT NOT NULL,
         item_cost_units BIGINT NOT NULL,
@@ -2159,14 +2154,14 @@ data:
         PRIMARY KEY (order_id, product_id),
         FOREIGN KEY (order_id) REFERENCES accounting."order"(order_id) ON DELETE CASCADE
     );
-  
+
     -- Accounting Service: grant permission to schema
     GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA accounting TO astronomy_user;
-  
+
     -- Product Catalog Service: create a schema
     CREATE SCHEMA catalog;
     GRANT USAGE ON SCHEMA catalog TO astronomy_user;
-  
+
     -- Product Catalog Service: create tables
     CREATE TABLE catalog.products (
         id TEXT PRIMARY KEY,
@@ -2178,10 +2173,10 @@ data:
         price_nanos INT NOT NULL,
         categories TEXT
     );
-  
+
     -- Product Catalog Service: grant permission to schema
     GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO astronomy_user;
-  
+
     -- Product Catalog Service: add product data
     INSERT INTO catalog.products (id, name, description, picture, price_currency_code, price_units, price_nanos, categories)
     VALUES
@@ -2195,6 +2190,7 @@ data:
         ('9SIQT8TOJO', 'Optical Tube Assembly', 'Capturing impressive deep-sky astroimages is easier than ever with Rowe-Ackermann Schmidt Astrograph (RASA) V2, the perfect companion to today''s top DSLR or astronomical CCD cameras. This fast, wide-field f/2.2 system allows for shorter exposure times compared to traditional f/10 astroimaging, without sacrificing resolution. Because shorter sub-exposure times are possible, your equatorial mount won''t need to accurately track over extended periods. The short focal length also lessens equatorial tracking demands. In many cases, autoguiding will not be required.', 'OpticalTubeAssembly.jpg', 'USD', 3599, 0, 'accessories,telescopes,assembly'),
         ('6E92ZMYYFZ', 'Solar Filter', 'Enhance your viewing experience with EclipSmart Solar Filter for 8" telescopes. With two Velcro straps and four self-adhesive Velcro pads for added safety, you can be assured that the solar filter cannot be accidentally knocked off and will provide Solar Safe, ISO compliant viewing.', 'SolarFilter.jpg', 'USD', 69, 950000000, 'accessories,telescopes'),
         ('HQTGWGPNH4', 'The Comet Book', 'A 16th-century treatise on comets, created anonymously in Flanders (now northern France) and now held at the Universitätsbibliothek Kassel. Commonly known as The Comet Book (or Kometenbuch in German), its full title translates as "Comets and their General and Particular Meanings, According to Ptolomeé, Albumasar, Haly, Aliquind and other Astrologers". The image is from https://publicdomainreview.org/collection/the-comet-book, made available by the Universitätsbibliothek Kassel under a CC-BY SA 4.0 license (https://creativecommons.org/licenses/by-sa/4.0/)', 'TheCometBook.jpg', 'USD', 0, 990000000, 'books');
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2203,9 +2199,9 @@ metadata:
   name: ad
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: ad
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: ad
     app.kubernetes.io/name: ad
@@ -2221,8 +2217,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: ad
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2231,9 +2227,9 @@ metadata:
   name: agent
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: agent
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: agent
     app.kubernetes.io/name: agent
@@ -2246,8 +2242,8 @@ spec:
       name: tcp-service
       targetPort: 8010
   selector:
-    
     opentelemetry.io/name: agent
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2256,9 +2252,9 @@ metadata:
   name: astronomy-db
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: astronomy-db
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: astronomy-db
     app.kubernetes.io/name: astronomy-db
@@ -2271,8 +2267,8 @@ spec:
       name: tcp-service
       targetPort: 5432
   selector:
-    
     opentelemetry.io/name: astronomy-db
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2281,9 +2277,9 @@ metadata:
   name: cart
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: cart
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: cart
     app.kubernetes.io/name: cart
@@ -2296,8 +2292,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: cart
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2306,9 +2302,9 @@ metadata:
   name: chatbot
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: chatbot
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: chatbot
     app.kubernetes.io/name: chatbot
@@ -2321,8 +2317,8 @@ spec:
       name: tcp-service
       targetPort: 7860
   selector:
-    
     opentelemetry.io/name: chatbot
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2331,9 +2327,9 @@ metadata:
   name: checkout
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: checkout
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: checkout
     app.kubernetes.io/name: checkout
@@ -2346,8 +2342,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: checkout
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2356,9 +2352,9 @@ metadata:
   name: currency
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: currency
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: currency
     app.kubernetes.io/name: currency
@@ -2371,8 +2367,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: currency
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2381,9 +2377,9 @@ metadata:
   name: email
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: email
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: email
     app.kubernetes.io/name: email
@@ -2396,8 +2392,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: email
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2406,9 +2402,9 @@ metadata:
   name: flagd
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: flagd
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: flagd
     app.kubernetes.io/name: flagd
@@ -2423,12 +2419,9 @@ spec:
     - port: 8016
       name: ofrep
       targetPort: 8016
-    - port: 4000
-      name: tcp-service-0
-      targetPort: 4000
   selector:
-    
     opentelemetry.io/name: flagd
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2437,9 +2430,9 @@ metadata:
   name: frontend
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: frontend
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: frontend
     app.kubernetes.io/name: frontend
@@ -2452,8 +2445,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: frontend
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2462,9 +2455,9 @@ metadata:
   name: frontend-proxy
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: frontend-proxy
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: frontend-proxy
     app.kubernetes.io/name: frontend-proxy
@@ -2477,8 +2470,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: frontend-proxy
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2487,9 +2480,9 @@ metadata:
   name: image-provider
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: image-provider
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: image-provider
     app.kubernetes.io/name: image-provider
@@ -2502,8 +2495,8 @@ spec:
       name: tcp-service
       targetPort: 8081
   selector:
-    
     opentelemetry.io/name: image-provider
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2512,9 +2505,9 @@ metadata:
   name: kafka
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: kafka
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: kafka
     app.kubernetes.io/name: kafka
@@ -2530,8 +2523,8 @@ spec:
       name: controller
       targetPort: 9093
   selector:
-    
     opentelemetry.io/name: kafka
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2540,9 +2533,9 @@ metadata:
   name: mcp
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: mcp
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: mcp
     app.kubernetes.io/name: mcp
@@ -2555,8 +2548,8 @@ spec:
       name: tcp-service
       targetPort: 8011
   selector:
-    
     opentelemetry.io/name: mcp
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2565,9 +2558,9 @@ metadata:
   name: opamp-server
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: opamp-server
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: opamp-server
     app.kubernetes.io/name: opamp-server
@@ -2583,8 +2576,8 @@ spec:
       name: opamp-ui
       targetPort: 4321
   selector:
-    
     opentelemetry.io/name: opamp-server
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2593,9 +2586,9 @@ metadata:
   name: payment
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: payment
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: payment
     app.kubernetes.io/name: payment
@@ -2608,8 +2601,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: payment
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2618,9 +2611,9 @@ metadata:
   name: product-catalog
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: product-catalog
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: product-catalog
     app.kubernetes.io/name: product-catalog
@@ -2633,8 +2626,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: product-catalog
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2643,9 +2636,9 @@ metadata:
   name: quote
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: quote
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: quote
     app.kubernetes.io/name: quote
@@ -2658,8 +2651,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: quote
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2668,9 +2661,9 @@ metadata:
   name: recommendation
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: recommendation
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: recommendation
     app.kubernetes.io/name: recommendation
@@ -2683,8 +2676,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: recommendation
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2693,9 +2686,9 @@ metadata:
   name: shipping
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: shipping
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: shipping
     app.kubernetes.io/name: shipping
@@ -2708,8 +2701,8 @@ spec:
       name: tcp-service
       targetPort: 8080
   selector:
-    
     opentelemetry.io/name: shipping
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2718,9 +2711,9 @@ metadata:
   name: telemetry-docs
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: telemetry-docs
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: telemetry-docs
     app.kubernetes.io/name: telemetry-docs
@@ -2733,8 +2726,8 @@ spec:
       name: tcp-service
       targetPort: 8000
   selector:
-    
     opentelemetry.io/name: telemetry-docs
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: v1
@@ -2743,9 +2736,9 @@ metadata:
   name: valkey-cart
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: valkey-cart
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: valkey-cart
     app.kubernetes.io/name: valkey-cart
@@ -2758,8 +2751,8 @@ spec:
       name: valkey-cart
       targetPort: 6379
   selector:
-    
     opentelemetry.io/name: valkey-cart
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -2768,9 +2761,9 @@ metadata:
   name: accounting
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: accounting
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: accounting
     app.kubernetes.io/name: accounting
@@ -2781,14 +2774,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: accounting
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: accounting
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: accounting
         app.kubernetes.io/name: accounting
@@ -2798,7 +2789,7 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: accounting
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-accounting'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-accounting"
           imagePullPolicy: IfNotPresent
           env:
             - name: OTEL_SERVICE_NAME
@@ -2854,12 +2845,13 @@ spec:
           volumeMounts:
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
+            - sh
+            - -c
+            - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
           image: busybox:latest
           name: wait-for-kafka
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -2868,9 +2860,9 @@ metadata:
   name: ad
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: ad
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: ad
     app.kubernetes.io/name: ad
@@ -2881,14 +2873,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: ad
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: ad
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: ad
         app.kubernetes.io/name: ad
@@ -2898,10 +2888,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: ad
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-ad'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-ad"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 9465
               name: prometheus
             - containerPort: 8080
@@ -2961,6 +2950,7 @@ spec:
               memory: 300Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -2969,9 +2959,9 @@ metadata:
   name: agent
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: agent
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: agent
     app.kubernetes.io/name: agent
@@ -2982,14 +2972,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: agent
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: agent
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: agent
         app.kubernetes.io/name: agent
@@ -2999,10 +2987,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: agent
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-agent'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-agent"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8010
               name: service
           env:
@@ -3087,6 +3074,7 @@ spec:
         - configMap:
             name: agent-fixtures
           name: agent-fixtures
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3095,9 +3083,9 @@ metadata:
   name: astronomy-db
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: astronomy-db
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: astronomy-db
     app.kubernetes.io/name: astronomy-db
@@ -3108,14 +3096,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: astronomy-db
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: astronomy-db
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: astronomy-db
         app.kubernetes.io/name: astronomy-db
@@ -3149,7 +3135,7 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: astronomy-db
-          image: 'postgres:18.4'
+          image: "postgres:18.4"
           imagePullPolicy: IfNotPresent
           command:
             - docker-entrypoint.sh
@@ -3167,7 +3153,6 @@ spec:
             - -c
             - track_functions=all
           ports:
-            
             - containerPort: 5432
               name: service
           env:
@@ -3185,6 +3170,7 @@ spec:
         - name: postgresql-init
           configMap:
             name: postgresql-init
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3193,9 +3179,9 @@ metadata:
   name: cart
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: cart
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: cart
     app.kubernetes.io/name: cart
@@ -3206,14 +3192,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: cart
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: cart
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: cart
         app.kubernetes.io/name: cart
@@ -3223,10 +3207,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: cart
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-cart'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-cart"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -3283,13 +3266,14 @@ spec:
           volumeMounts:
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 valkey-cart 6379; do echo waiting for valkey-cart; sleep 2;
-            done;
+            - sh
+            - -c
+            - until nc -z -v -w30 valkey-cart 6379; do echo waiting for valkey-cart; sleep 2;
+              done;
           image: busybox:latest
           name: wait-for-valkey-cart
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3298,9 +3282,9 @@ metadata:
   name: chatbot
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: chatbot
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: chatbot
     app.kubernetes.io/name: chatbot
@@ -3311,14 +3295,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: chatbot
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: chatbot
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: chatbot
         app.kubernetes.io/name: chatbot
@@ -3328,10 +3310,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: chatbot
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-chatbot'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-chatbot"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 7860
               name: service
           env:
@@ -3387,6 +3368,7 @@ spec:
               memory: 500Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3395,9 +3377,9 @@ metadata:
   name: checkout
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: checkout
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: checkout
     app.kubernetes.io/name: checkout
@@ -3408,14 +3390,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: checkout
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: checkout
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: checkout
         app.kubernetes.io/name: checkout
@@ -3425,10 +3405,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: checkout
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-checkout'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-checkout"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -3507,14 +3486,15 @@ spec:
               mountPath: /tmp
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
+            - sh
+            - -c
+            - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
           image: busybox:latest
           name: wait-for-kafka
       volumes:
         - name: tmp
           emptyDir: {}
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3523,9 +3503,9 @@ metadata:
   name: currency
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: currency
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: currency
     app.kubernetes.io/name: currency
@@ -3536,14 +3516,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: currency
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: currency
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: currency
         app.kubernetes.io/name: currency
@@ -3553,10 +3531,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: currency
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-currency'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-currency"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -3595,7 +3572,7 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://$(OTEL_COLLECTOR_NAME):4317
             - name: VERSION
-              value: '3.0.0'
+              value: "3.0.0"
             - name: IPV6_ENABLED
               value: "false"
             - name: OTEL_RESOURCE_ATTRIBUTES
@@ -3608,6 +3585,7 @@ spec:
               memory: 20Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3616,9 +3594,9 @@ metadata:
   name: email
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: email
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: email
     app.kubernetes.io/name: email
@@ -3629,14 +3607,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: email
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: email
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: email
         app.kubernetes.io/name: email
@@ -3646,10 +3622,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: email
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-email'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-email"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -3703,6 +3678,7 @@ spec:
               memory: 100Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3711,9 +3687,9 @@ metadata:
   name: flagd
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: flagd
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: flagd
     app.kubernetes.io/name: flagd
@@ -3724,14 +3700,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: flagd
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: flagd
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: flagd
         app.kubernetes.io/name: flagd
@@ -3741,7 +3715,7 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: flagd
-          image: 'ghcr.io/open-feature/flagd:v0.16.0'
+          image: "ghcr.io/open-feature/flagd:v0.16.0"
           imagePullPolicy: IfNotPresent
           command:
             - /flagd-build
@@ -3753,7 +3727,6 @@ spec:
             - --uri
             - file:./etc/flagd/demo.flagd.json
           ports:
-            
             - containerPort: 8013
               name: rpc
             - containerPort: 8016
@@ -3807,12 +3780,8 @@ spec:
             - name: config-rw
               mountPath: /etc/flagd
         - name: flagd-ui
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-flagd-ui'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-flagd-ui"
           imagePullPolicy: IfNotPresent
-          ports:
-            
-            - containerPort: 4000
-              name: service
           env:
             - name: OTEL_SERVICE_NAME
               valueFrom:
@@ -3844,43 +3813,35 @@ spec:
               value: delta
             - name: OTEL_METRIC_EXPORT_INTERVAL
               value: "10000"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://$(OTEL_COLLECTOR_NAME):4318
-            - name: FLAGD_UI_PORT
-              value: "4000"
-            - name: SECRET_KEY_BASE
-              value: yYrECL4qbNwleYInGJYvVnSkwJuSQJ4ijPTx5tirGUXrbznFIBFVJdPl5t6O9ASw
-            - name: PHX_HOST
-              value: localhost
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.0.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME)
           resources:
             limits:
-              memory: 250Mi
-          volumeMounts:
-            - mountPath: /app/data
-              name: config-rw
+              memory: 512Mi
+            requests:
+              memory: 256Mi
       initContainers:
         - command:
-          - sh
-          - -c
-          - cp /config-ro/demo.flagd.json /config-rw/demo.flagd.json && cat /config-rw/demo.flagd.json
+            - sh
+            - -c
+            - cp /config-ro/demo.flagd.json /config-rw/demo.flagd.json && cat /config-rw/demo.flagd.json
           image: busybox
           name: init-config
           volumeMounts:
-          - mountPath: /config-ro
-            name: config-ro
-          - mountPath: /config-rw
-            name: config-rw
+            - mountPath: /config-ro
+              name: config-ro
+            - mountPath: /config-rw
+              name: config-rw
       volumes:
         - name: config-rw
           emptyDir: {}
         - configMap:
             name: flagd-config
           name: config-ro
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3889,9 +3850,9 @@ metadata:
   name: fraud-detection
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: fraud-detection
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: fraud-detection
     app.kubernetes.io/name: fraud-detection
@@ -3902,14 +3863,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: fraud-detection
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: fraud-detection
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: fraud-detection
         app.kubernetes.io/name: fraud-detection
@@ -3919,7 +3878,7 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: fraud-detection
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-fraud-detection'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-fraud-detection"
           imagePullPolicy: IfNotPresent
           env:
             - name: OTEL_SERVICE_NAME
@@ -3979,12 +3938,13 @@ spec:
           volumeMounts:
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
+            - sh
+            - -c
+            - until nc -z -v -w30 kafka 9092; do echo waiting for kafka; sleep 2; done;
           image: busybox:latest
           name: wait-for-kafka
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -3993,9 +3953,9 @@ metadata:
   name: frontend
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: frontend
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: frontend
     app.kubernetes.io/name: frontend
@@ -4006,14 +3966,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: frontend
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: frontend
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: frontend
         app.kubernetes.io/name: frontend
@@ -4023,10 +3981,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: frontend
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-frontend'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-frontend"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -4108,6 +4065,7 @@ spec:
             runAsUser: 1001
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -4116,9 +4074,9 @@ metadata:
   name: frontend-proxy
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: frontend-proxy
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: frontend-proxy
     app.kubernetes.io/name: frontend-proxy
@@ -4129,14 +4087,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: frontend-proxy
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: frontend-proxy
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: frontend-proxy
         app.kubernetes.io/name: frontend-proxy
@@ -4151,10 +4107,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: frontend-proxy
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-frontend-proxy'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-frontend-proxy"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -4258,71 +4213,72 @@ spec:
               subPath: envoy.tmpl.yaml
       initContainers:
         - command:
-          - sh
-          - -c
-          - cp /home/envoy/envoy.tmpl.yaml /patched/envoy.tmpl.yaml
+            - sh
+            - -c
+            - cp /home/envoy/envoy.tmpl.yaml /patched/envoy.tmpl.yaml
           image: ghcr.io/open-telemetry/demo:3.0.0-frontend-proxy
           name: copy-envoy-config
           volumeMounts:
-          - mountPath: /patched
-            name: patched-envoy-config
+            - mountPath: /patched
+              name: patched-envoy-config
         - command:
-          - python
-          - -c
-          - |
-            with open('/patched/envoy.tmpl.yaml', 'r') as f:
-                content = f.read()
-        
-            # Insert the slowLcp fault-injection route right before the
-            # catch-all route, so unmatched /product/ traffic (no query
-            # param) keeps falling through to the catch-all exactly as
-            # before.
-            #
-            # No textwrap.dedent() here - the YAML block scalar above already
-            # strips this block's own outer nesting indentation before Python
-            # ever sees it, so these strings already carry the envoy file's
-            # real absolute indentation (24/26 spaces). Dedenting again would
-            # strip that too, and the exact-text match below would never hit.
-            orig_route = ("""\
-                                    - match: { prefix: "/" }  # Default/catch-all route - keep last since prefix:"/" matches everything
-                                      route: { cluster: frontend }""")
-        
-            new_route = ("""\
-                                    # EXPERIMENTAL: server-side-only LCP degradation for
-                                    # testing - matched only when the client adds
-                                    # ?slowLcp=<ms>, so normal /product/ traffic (no query
-                                    # param) falls through to the catch-all route below
-                                    # exactly as before.
-                                    - match:
-                                        prefix: "/product/"
-                                        query_parameters:
-                                          - name: slowLcp
-                                            present_match: true
-                                      typed_per_filter_config:
-                                        envoy.filters.http.fault:
-                                          "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
-                                          delay:
-                                            fixed_delay: 10s
-                                            percentage:
-                                              numerator: 100
-                                      route: { cluster: frontend }
-                                    - match: { prefix: "/" }  # Default/catch-all route - keep last since prefix:"/" matches everything
-                                      route: { cluster: frontend }""")
-        
-            assert orig_route in content, 'catch-all route text not found - upstream envoy.tmpl.yaml changed'
-        
-            content = content.replace(orig_route, new_route)
-        
-            with open('/patched/envoy.tmpl.yaml', 'w') as f:
-                f.write(content)
+            - python
+            - -c
+            - |
+              with open('/patched/envoy.tmpl.yaml', 'r') as f:
+                  content = f.read()
+
+              # Insert the slowLcp fault-injection route right before the
+              # catch-all route, so unmatched /product/ traffic (no query
+              # param) keeps falling through to the catch-all exactly as
+              # before.
+              #
+              # No textwrap.dedent() here - the YAML block scalar above already
+              # strips this block's own outer nesting indentation before Python
+              # ever sees it, so these strings already carry the envoy file's
+              # real absolute indentation (24/26 spaces). Dedenting again would
+              # strip that too, and the exact-text match below would never hit.
+              orig_route = ("""\
+                                      - match: { prefix: "/" }  # Default/catch-all route - keep last since prefix:"/" matches everything
+                                        route: { cluster: frontend }""")
+
+              new_route = ("""\
+                                      # EXPERIMENTAL: server-side-only LCP degradation for
+                                      # testing - matched only when the client adds
+                                      # ?slowLcp=<ms>, so normal /product/ traffic (no query
+                                      # param) falls through to the catch-all route below
+                                      # exactly as before.
+                                      - match:
+                                          prefix: "/product/"
+                                          query_parameters:
+                                            - name: slowLcp
+                                              present_match: true
+                                        typed_per_filter_config:
+                                          envoy.filters.http.fault:
+                                            "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+                                            delay:
+                                              fixed_delay: 10s
+                                              percentage:
+                                                numerator: 100
+                                        route: { cluster: frontend }
+                                      - match: { prefix: "/" }  # Default/catch-all route - keep last since prefix:"/" matches everything
+                                        route: { cluster: frontend }""")
+
+              assert orig_route in content, 'catch-all route text not found - upstream envoy.tmpl.yaml changed'
+
+              content = content.replace(orig_route, new_route)
+
+              with open('/patched/envoy.tmpl.yaml', 'w') as f:
+                  f.write(content)
           image: docker.io/library/python:3.12-slim
           name: patch-envoy-config
           volumeMounts:
-          - mountPath: /patched
-            name: patched-envoy-config
+            - mountPath: /patched
+              name: patched-envoy-config
       volumes:
         - emptyDir: {}
           name: patched-envoy-config
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -4331,9 +4287,9 @@ metadata:
   name: image-provider
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: image-provider
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: image-provider
     app.kubernetes.io/name: image-provider
@@ -4344,14 +4300,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: image-provider
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: image-provider
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: image-provider
         app.kubernetes.io/name: image-provider
@@ -4367,10 +4321,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: image-provider
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-image-provider'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-image-provider"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8081
               name: service
           env:
@@ -4420,6 +4373,7 @@ spec:
               memory: 50Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -4428,9 +4382,9 @@ metadata:
   name: kafka
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: kafka
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: kafka
     app.kubernetes.io/name: kafka
@@ -4441,14 +4395,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: kafka
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: kafka
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: kafka
         app.kubernetes.io/name: kafka
@@ -4458,10 +4410,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: kafka
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-kafka'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-kafka"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 9092
               name: plaintext
             - containerPort: 9093
@@ -4525,6 +4476,7 @@ spec:
             runAsUser: 1000
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -4533,9 +4485,9 @@ metadata:
   name: load-generator
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: load-generator
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: load-generator
     app.kubernetes.io/name: load-generator
@@ -4546,14 +4498,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: load-generator
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: load-generator
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: load-generator
         app.kubernetes.io/name: load-generator
@@ -4563,7 +4513,7 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: load-generator
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-load-generator'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-load-generator"
           imagePullPolicy: IfNotPresent
           env:
             - name: OTEL_SERVICE_NAME
@@ -4638,280 +4588,281 @@ spec:
               subPath: script.js
       initContainers:
         - command:
-          - sh
-          - -c
-          - cp /home/k6/script.js /patched/script.js
+            - sh
+            - -c
+            - cp /home/k6/script.js /patched/script.js
           image: ghcr.io/open-telemetry/demo:3.0.0-load-generator
           name: copy-script
           volumeMounts:
-          - mountPath: /patched
-            name: patched-script
+            - mountPath: /patched
+              name: patched-script
         - command:
-          - python
-          - -c
-          - |
-            import textwrap
-        
-            with open('/patched/script.js', 'r') as f:
-                content = f.read()
-        
-            # The upstream 3.0.0-load-generator image has none of these fixes - none
-            # were ever merged upstream. This patches in:
-            #   1. waitForSelector instead of the no-op
-            #      waitForLoadState('domcontentloaded') after a client-side route
-            #      change (domcontentloaded already fired once for the initial load
-            #      and never fires again for a pushState transition, so the
-            #      add-to-cart click never finds its target).
-            #   2. A wait for the RoofBinoculars.jpg thumbnail response before
-            #      clicking the product link - imageSlowLoad delays that request by
-            #      up to 10s, and the homepage isn't hydrated/interactive until it
-            #      resolves, so an early click never reaches the Next.js router and
-            #      the SPA navigation silently no-ops.
-            #   3. A fresh browser context per iteration instead of a shared page, so
-            #      cookies/storage don't leak across simulated users for the VU's
-            #      entire 9999h lifetime.
-            #   4. Forcing visibilitychange/pagehide and giving the RUM agent's
-            #      session-trace blob harvest a real window to flush before the
-            #      context is torn down - page.close() alone cuts the beacon off
-            #      mid-flight.
-            orig_task = textwrap.dedent("""\
-                async function addProductToCartBrowser(page) {
-                    // Roof Binoculars (2ZYFJ3GM2N). Selects by href / data-cy rather than
-                    // :has-text(), which k6 browser's native CSS engine does not support
-                    // (it forwards selectors straight to document.querySelectorAll, unlike
-                    // Playwright's own selector engine).
-                    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' })
-                    await page.waitForSelector('a[href="/product/2ZYFJ3GM2N"]', { timeout: 15000 })
-                    await page.click('a[href="/product/2ZYFJ3GM2N"]')
-                    await page.waitForLoadState('domcontentloaded')
-                    await page.click('[data-cy="product-add-to-cart"]')
-                    await page.waitForLoadState('domcontentloaded')
-                    await page.waitForTimeout(2000)
-                }""")
-        
-            new_task = textwrap.dedent("""\
-                async function addProductToCartBrowser(page) {
-                    // Roof Binoculars (2ZYFJ3GM2N). Selects by href / data-cy rather than
-                    // :has-text(), which k6 browser's native CSS engine does not support
-                    // (it forwards selectors straight to document.querySelectorAll, unlike
-                    // Playwright's own selector engine).
-                    await Promise.all([
-                        page.waitForResponse(/\\/images\\/products\\/RoofBinoculars\\.jpg/, { timeout: 25000 }),
-                        page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' }),
-                    ])
-                    await page.waitForSelector('a[href="/product/2ZYFJ3GM2N"]', { timeout: 15000 })
-                    await page.click('a[href="/product/2ZYFJ3GM2N"]')
-                    await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
-                    await page.click('[data-cy="product-add-to-cart"]')
-                    await page.waitForTimeout(2000)
-                }
-        
-                async function viewProductPageBrowser(page) {
-                    // Unlike addProductToCartBrowser, this navigates straight to the
-                    // product URL (a real document load) rather than reaching it via
-                    // a client-side pushState click from "/". A pushState transition
-                    // never fires a new document load, so the RUM agent never records
-                    // /product/{id} as its own Page URL or gives it its own Web
-                    // Vitals - New Relic only ever showed "/" and "/cart" for that
-                    // reason.
-                    //
-                    // Do NOT use page.route()/context.route() here (or anywhere in
-                    // this scenario) to inject a delay header on this navigation -
-                    // this k6-browser version's CDP Fetch-domain interception has the
-                    // same "VU never reclaimed for a second iteration" bug documented
-                    // above for the baggage header: it silently stalls this VU
-                    // forever the first time it fires, permanently killing every
-                    // future browser iteration (currency/add_to_cart/view_product
-                    // alike), not just this one. Confirmed by reproducing it live:
-                    // one successful delayed load, then zero further iterations.
-                    //
-                    // The product hero image itself can't be used to demonstrate a
-                    // real LCP regression either: it's rendered via fetch()+blob()+
-                    // background-image (ProductCard/ProductDetail), which browsers
-                    // never treat as an LCP candidate since blob: URLs bypass the
-                    // real image resource pipeline the LCP algorithm hooks into.
-                    //
-                    // So the delay is applied server-side instead: frontend-proxy's
-                    // envoy.tmpl.yaml (see the frontend-proxy component override
-                    // above) has an extra route that fixed_delay's any /product/
-                    // request carrying a `slowLcp` query param - a plain query
-                    // param needs no CDP interception at all, so it can't trigger
-                    // the route()/VU-stall bug. Delaying the document delays every
-                    // paint on the page, guaranteeing a real LCP/FCP regression for
-                    // this URL. Gated on imageSlowLoad exactly like every other
-                    // chaos scenario in this demo - off by default.
-                    const product = randomChoice(products)
-                    const delayMs = getFlagdValue('imageSlowLoad')
-                    const url = delayMs > 0
-                        ? `${BASE_URL}/product/${product}?slowLcp=${delayMs}`
-                        : `${BASE_URL}/product/${product}`
-                    await page.goto(url, { waitUntil: 'domcontentloaded' })
-                    await page.waitForTimeout(2000)
-                }""")
-        
-            orig_scenario = textwrap.dedent("""\
-                export async function browserScenario() {
-                    if (getFlagdValue('loadGeneratorTraffic') <= 0) {
-                        sleep(cryptoRandom() * 9 + 1)
-                        return
-                    }
-        
-                    const page = await browser.newPage()
-                    const isCurrencyChange = cryptoRandom() < 0.5
-                    const span = tracer.startSpan(isCurrencyChange ? 'browser_change_currency' : 'browser_add_to_cart')
-                    try {
-                        await page.setExtraHTTPHeaders({ baggage: 'synthetic_request=true' })
-                        if (isCurrencyChange) {
-                            span.log('Currency changed to CHF')
-                            await changeCurrency(page)
-                        } else {
-                            span.log('Product added to cart successfully')
-                            await addProductToCartBrowser(page)
-                        }
-                    } catch (e) {
-                        console.error(`browser task error: ${e}`)
-                    } finally {
-                        span.end()
-                        await page.close()
-                    }
-        
-                    sleep(cryptoRandom() * 9 + 1)
-                }""")
-        
-            new_scenario = textwrap.dedent("""\
-                export async function browserScenario() {
-                    if (getFlagdValue('loadGeneratorTraffic') <= 0) {
-                        sleep(cryptoRandom() * 9 + 1)
-                        return
-                    }
-        
-                    const context = await browser.newContext()
-                    const page = await context.newPage()
-                    // Tag first-party requests as synthetic via baggage (checkout/payment
-                    // annotate spans based on this) the same way the pre-k6
-                    // Locust/Playwright load-generator did, but scoped to same-origin
-                    // only. The old code (and, until this fix, this one) added the
-                    // header via a global page.setExtraHTTPHeaders/page.route matching
-                    // every request including third-party ones. A custom header on a
-                    // cross-origin request is a non-simple request under the Fetch
-                    // spec, forcing a real CORS preflight; k6/Playwright drives the page
-                    // through CDP, which loses Chromium's normal "simple cross-origin
-                    // request" fast path once a custom header is present. New Relic's
-                    // CDN doesn't answer OPTIONS preflights on its RUM agent's
-                    // chunk-loading domains, so that preflight failed and the agent's
-                    // harvester chunk (where its fetch/XHR/sendBeacon calls to New
-                    // Relic actually happen) never loaded - even though the base agent
-                    // initialized fine. The same bug independently broke loading Google
-                    // Fonts under k6/Playwright. Scoping the header to same-origin only
-                    // avoids triggering a preflight for any third-party resource.
-                    //
-                    // page.route()/context.route() intercepts via CDP's Fetch
-                    // domain, and something about that subscription doesn't
-                    // release cleanly on this k6-browser version - context.close()
-                    // reports success (confirmed clean via K6_BROWSER_DEBUG
-                    // tracing) but k6's own VU/executor never reclaims the VU for
-                    // a second iteration, silently stalling the whole scenario
-                    // forever after exactly one iteration, even with explicit
-                    // page.unroute() before close. Tagging same-origin
-                    // fetch/XHR calls via an in-page addInitScript() achieves the
-                    // same origin-scoped header without touching the CDP network
-                    // domain at all, avoiding whatever that interaction is.
-                    await context.addInitScript(() => {
-                        const origFetch = window.fetch
-                        window.fetch = function (input, init) {
-                            try {
-                                const url = typeof input === 'string' ? input : input.url
-                                if (url && url.startsWith(window.location.origin)) {
-                                    init = init || {}
-                                    const headers = new Headers(init.headers || {})
-                                    const existing = headers.get('baggage') || ''
-                                    headers.set('baggage', [existing, 'synthetic_request=true'].filter(Boolean).join(', '))
-                                    init.headers = headers
-                                }
-                            } catch (e) {}
-                            return origFetch.call(this, input, init)
-                        }
-                        const origOpen = XMLHttpRequest.prototype.open
-                        XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-                            const result = origOpen.call(this, method, url, ...rest)
-                            try {
-                                if (url && (url.startsWith(window.location.origin) || url.startsWith('/'))) {
-                                    this.setRequestHeader('baggage', 'synthetic_request=true')
-                                }
-                            } catch (e) {}
-                            return result
-                        }
-                    })
-                    const r = cryptoRandom()
-                    const task = r < 0.1 ? 'currency' : r < 0.3 ? 'add_to_cart' : 'view_product'
-                    const spanName = {
-                        currency: 'browser_change_currency',
-                        add_to_cart: 'browser_add_to_cart',
-                        view_product: 'browser_view_product',
-                    }[task]
-                    const span = tracer.startSpan(spanName)
-                    try {
-                        if (task === 'currency') {
-                            span.log('Currency changed to CHF')
-                            await changeCurrency(page)
-                        } else if (task === 'add_to_cart') {
-                            span.log('Product added to cart successfully')
-                            await addProductToCartBrowser(page)
-                        } else {
-                            span.log('Viewed product page via direct navigation')
-                            await viewProductPageBrowser(page)
-                        }
-                    } catch (e) {
-                        console.error(`browser task error: ${e}`)
-                    } finally {
-                        span.end()
-                        // INP/RUM beacons are only finalized/sent by the New Relic
-                        // browser agent when its visibilitychange handler observes
-                        // document.visibilityState === "hidden" (checked inside the
-                        // handler, not inferred from the event alone). Dispatching a
-                        // bare 'visibilitychange' event does not change that real,
-                        // browser-computed property, so the agent's check silently
-                        // failed and no beacon was ever sent before context.close()
-                        // tore the page down. Override the getters first so the
-                        // agent's own check passes.
-                        await page.evaluate(() => {
-                            Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true })
-                            Object.defineProperty(document, 'hidden', { get: () => true, configurable: true })
-                            document.dispatchEvent(new Event('visibilitychange'))
-                            window.dispatchEvent(new Event('pagehide'))
-                        }).catch(() => {})
-                        await page.waitForTimeout(8000)
-                        await context.close()
-                    }
-        
-                    sleep(cryptoRandom() * 2 + 1)
-                }""")
-        
-            # #3813: the browser scenario's VU count is hardcoded to 1, independent of
-            # LOAD_GENERATOR_VUS, so there's no way to run more than one concurrent
-            # browser/RUM session. Make it configurable the same way LOAD_GENERATOR_VUS
-            # already works for the HTTP scenario.
-            orig_vus = "                vus: 1,\n"
-            new_vus = "                vus: parseInt(__ENV.BROWSER_GENERATOR_VUS || '1'),\n"
-        
-            assert orig_task in content, 'addProductToCartBrowser text not found - upstream script.js changed'
-            assert orig_scenario in content, 'browserScenario text not found - upstream script.js changed'
-            assert orig_vus in content, 'hardcoded browser vus line not found - upstream script.js changed'
-        
-            content = content.replace(orig_task, new_task)
-            content = content.replace(orig_scenario, new_scenario)
-            content = content.replace(orig_vus, new_vus)
-        
-            with open('/patched/script.js', 'w') as f:
-                f.write(content)
+            - python
+            - -c
+            - |
+              import textwrap
+
+              with open('/patched/script.js', 'r') as f:
+                  content = f.read()
+
+              # The upstream 3.0.0-load-generator image has none of these fixes - none
+              # were ever merged upstream. This patches in:
+              #   1. waitForSelector instead of the no-op
+              #      waitForLoadState('domcontentloaded') after a client-side route
+              #      change (domcontentloaded already fired once for the initial load
+              #      and never fires again for a pushState transition, so the
+              #      add-to-cart click never finds its target).
+              #   2. A wait for the RoofBinoculars.jpg thumbnail response before
+              #      clicking the product link - imageSlowLoad delays that request by
+              #      up to 10s, and the homepage isn't hydrated/interactive until it
+              #      resolves, so an early click never reaches the Next.js router and
+              #      the SPA navigation silently no-ops.
+              #   3. A fresh browser context per iteration instead of a shared page, so
+              #      cookies/storage don't leak across simulated users for the VU's
+              #      entire 9999h lifetime.
+              #   4. Forcing visibilitychange/pagehide and giving the RUM agent's
+              #      session-trace blob harvest a real window to flush before the
+              #      context is torn down - page.close() alone cuts the beacon off
+              #      mid-flight.
+              orig_task = textwrap.dedent("""\
+                  async function addProductToCartBrowser(page) {
+                      // Roof Binoculars (2ZYFJ3GM2N). Selects by href / data-cy rather than
+                      // :has-text(), which k6 browser's native CSS engine does not support
+                      // (it forwards selectors straight to document.querySelectorAll, unlike
+                      // Playwright's own selector engine).
+                      await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' })
+                      await page.waitForSelector('a[href="/product/2ZYFJ3GM2N"]', { timeout: 15000 })
+                      await page.click('a[href="/product/2ZYFJ3GM2N"]')
+                      await page.waitForLoadState('domcontentloaded')
+                      await page.click('[data-cy="product-add-to-cart"]')
+                      await page.waitForLoadState('domcontentloaded')
+                      await page.waitForTimeout(2000)
+                  }""")
+
+              new_task = textwrap.dedent("""\
+                  async function addProductToCartBrowser(page) {
+                      // Roof Binoculars (2ZYFJ3GM2N). Selects by href / data-cy rather than
+                      // :has-text(), which k6 browser's native CSS engine does not support
+                      // (it forwards selectors straight to document.querySelectorAll, unlike
+                      // Playwright's own selector engine).
+                      await Promise.all([
+                          page.waitForResponse(/\\/images\\/products\\/RoofBinoculars\\.jpg/, { timeout: 25000 }),
+                          page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' }),
+                      ])
+                      await page.waitForSelector('a[href="/product/2ZYFJ3GM2N"]', { timeout: 15000 })
+                      await page.click('a[href="/product/2ZYFJ3GM2N"]')
+                      await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
+                      await page.click('[data-cy="product-add-to-cart"]')
+                      await page.waitForTimeout(2000)
+                  }
+
+                  async function viewProductPageBrowser(page) {
+                      // Unlike addProductToCartBrowser, this navigates straight to the
+                      // product URL (a real document load) rather than reaching it via
+                      // a client-side pushState click from "/". A pushState transition
+                      // never fires a new document load, so the RUM agent never records
+                      // /product/{id} as its own Page URL or gives it its own Web
+                      // Vitals - New Relic only ever showed "/" and "/cart" for that
+                      // reason.
+                      //
+                      // Do NOT use page.route()/context.route() here (or anywhere in
+                      // this scenario) to inject a delay header on this navigation -
+                      // this k6-browser version's CDP Fetch-domain interception has the
+                      // same "VU never reclaimed for a second iteration" bug documented
+                      // above for the baggage header: it silently stalls this VU
+                      // forever the first time it fires, permanently killing every
+                      // future browser iteration (currency/add_to_cart/view_product
+                      // alike), not just this one. Confirmed by reproducing it live:
+                      // one successful delayed load, then zero further iterations.
+                      //
+                      // The product hero image itself can't be used to demonstrate a
+                      // real LCP regression either: it's rendered via fetch()+blob()+
+                      // background-image (ProductCard/ProductDetail), which browsers
+                      // never treat as an LCP candidate since blob: URLs bypass the
+                      // real image resource pipeline the LCP algorithm hooks into.
+                      //
+                      // So the delay is applied server-side instead: frontend-proxy's
+                      // envoy.tmpl.yaml (see the frontend-proxy component override
+                      // above) has an extra route that fixed_delay's any /product/
+                      // request carrying a `slowLcp` query param - a plain query
+                      // param needs no CDP interception at all, so it can't trigger
+                      // the route()/VU-stall bug. Delaying the document delays every
+                      // paint on the page, guaranteeing a real LCP/FCP regression for
+                      // this URL. Gated on imageSlowLoad exactly like every other
+                      // chaos scenario in this demo - off by default.
+                      const product = randomChoice(products)
+                      const delayMs = getFlagdValue('imageSlowLoad')
+                      const url = delayMs > 0
+                          ? `${BASE_URL}/product/${product}?slowLcp=${delayMs}`
+                          : `${BASE_URL}/product/${product}`
+                      await page.goto(url, { waitUntil: 'domcontentloaded' })
+                      await page.waitForTimeout(2000)
+                  }""")
+
+              orig_scenario = textwrap.dedent("""\
+                  export async function browserScenario() {
+                      if (getFlagdValue('loadGeneratorTraffic') <= 0) {
+                          sleep(cryptoRandom() * 9 + 1)
+                          return
+                      }
+
+                      const page = await browser.newPage()
+                      const isCurrencyChange = cryptoRandom() < 0.5
+                      const span = tracer.startSpan(isCurrencyChange ? 'browser_change_currency' : 'browser_add_to_cart')
+                      try {
+                          await page.setExtraHTTPHeaders({ baggage: 'synthetic_request=true' })
+                          if (isCurrencyChange) {
+                              span.log('Currency changed to CHF')
+                              await changeCurrency(page)
+                          } else {
+                              span.log('Product added to cart successfully')
+                              await addProductToCartBrowser(page)
+                          }
+                      } catch (e) {
+                          console.error(`browser task error: ${e}`)
+                      } finally {
+                          span.end()
+                          await page.close()
+                      }
+
+                      sleep(cryptoRandom() * 9 + 1)
+                  }""")
+
+              new_scenario = textwrap.dedent("""\
+                  export async function browserScenario() {
+                      if (getFlagdValue('loadGeneratorTraffic') <= 0) {
+                          sleep(cryptoRandom() * 9 + 1)
+                          return
+                      }
+
+                      const context = await browser.newContext()
+                      const page = await context.newPage()
+                      // Tag first-party requests as synthetic via baggage (checkout/payment
+                      // annotate spans based on this) the same way the pre-k6
+                      // Locust/Playwright load-generator did, but scoped to same-origin
+                      // only. The old code (and, until this fix, this one) added the
+                      // header via a global page.setExtraHTTPHeaders/page.route matching
+                      // every request including third-party ones. A custom header on a
+                      // cross-origin request is a non-simple request under the Fetch
+                      // spec, forcing a real CORS preflight; k6/Playwright drives the page
+                      // through CDP, which loses Chromium's normal "simple cross-origin
+                      // request" fast path once a custom header is present. New Relic's
+                      // CDN doesn't answer OPTIONS preflights on its RUM agent's
+                      // chunk-loading domains, so that preflight failed and the agent's
+                      // harvester chunk (where its fetch/XHR/sendBeacon calls to New
+                      // Relic actually happen) never loaded - even though the base agent
+                      // initialized fine. The same bug independently broke loading Google
+                      // Fonts under k6/Playwright. Scoping the header to same-origin only
+                      // avoids triggering a preflight for any third-party resource.
+                      //
+                      // page.route()/context.route() intercepts via CDP's Fetch
+                      // domain, and something about that subscription doesn't
+                      // release cleanly on this k6-browser version - context.close()
+                      // reports success (confirmed clean via K6_BROWSER_DEBUG
+                      // tracing) but k6's own VU/executor never reclaims the VU for
+                      // a second iteration, silently stalling the whole scenario
+                      // forever after exactly one iteration, even with explicit
+                      // page.unroute() before close. Tagging same-origin
+                      // fetch/XHR calls via an in-page addInitScript() achieves the
+                      // same origin-scoped header without touching the CDP network
+                      // domain at all, avoiding whatever that interaction is.
+                      await context.addInitScript(() => {
+                          const origFetch = window.fetch
+                          window.fetch = function (input, init) {
+                              try {
+                                  const url = typeof input === 'string' ? input : input.url
+                                  if (url && url.startsWith(window.location.origin)) {
+                                      init = init || {}
+                                      const headers = new Headers(init.headers || {})
+                                      const existing = headers.get('baggage') || ''
+                                      headers.set('baggage', [existing, 'synthetic_request=true'].filter(Boolean).join(', '))
+                                      init.headers = headers
+                                  }
+                              } catch (e) {}
+                              return origFetch.call(this, input, init)
+                          }
+                          const origOpen = XMLHttpRequest.prototype.open
+                          XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+                              const result = origOpen.call(this, method, url, ...rest)
+                              try {
+                                  if (url && (url.startsWith(window.location.origin) || url.startsWith('/'))) {
+                                      this.setRequestHeader('baggage', 'synthetic_request=true')
+                                  }
+                              } catch (e) {}
+                              return result
+                          }
+                      })
+                      const r = cryptoRandom()
+                      const task = r < 0.1 ? 'currency' : r < 0.3 ? 'add_to_cart' : 'view_product'
+                      const spanName = {
+                          currency: 'browser_change_currency',
+                          add_to_cart: 'browser_add_to_cart',
+                          view_product: 'browser_view_product',
+                      }[task]
+                      const span = tracer.startSpan(spanName)
+                      try {
+                          if (task === 'currency') {
+                              span.log('Currency changed to CHF')
+                              await changeCurrency(page)
+                          } else if (task === 'add_to_cart') {
+                              span.log('Product added to cart successfully')
+                              await addProductToCartBrowser(page)
+                          } else {
+                              span.log('Viewed product page via direct navigation')
+                              await viewProductPageBrowser(page)
+                          }
+                      } catch (e) {
+                          console.error(`browser task error: ${e}`)
+                      } finally {
+                          span.end()
+                          // INP/RUM beacons are only finalized/sent by the New Relic
+                          // browser agent when its visibilitychange handler observes
+                          // document.visibilityState === "hidden" (checked inside the
+                          // handler, not inferred from the event alone). Dispatching a
+                          // bare 'visibilitychange' event does not change that real,
+                          // browser-computed property, so the agent's check silently
+                          // failed and no beacon was ever sent before context.close()
+                          // tore the page down. Override the getters first so the
+                          // agent's own check passes.
+                          await page.evaluate(() => {
+                              Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true })
+                              Object.defineProperty(document, 'hidden', { get: () => true, configurable: true })
+                              document.dispatchEvent(new Event('visibilitychange'))
+                              window.dispatchEvent(new Event('pagehide'))
+                          }).catch(() => {})
+                          await page.waitForTimeout(8000)
+                          await context.close()
+                      }
+
+                      sleep(cryptoRandom() * 2 + 1)
+                  }""")
+
+              # #3813: the browser scenario's VU count is hardcoded to 1, independent of
+              # LOAD_GENERATOR_VUS, so there's no way to run more than one concurrent
+              # browser/RUM session. Make it configurable the same way LOAD_GENERATOR_VUS
+              # already works for the HTTP scenario.
+              orig_vus = "                vus: 1,\n"
+              new_vus = "                vus: parseInt(__ENV.BROWSER_GENERATOR_VUS || '1'),\n"
+
+              assert orig_task in content, 'addProductToCartBrowser text not found - upstream script.js changed'
+              assert orig_scenario in content, 'browserScenario text not found - upstream script.js changed'
+              assert orig_vus in content, 'hardcoded browser vus line not found - upstream script.js changed'
+
+              content = content.replace(orig_task, new_task)
+              content = content.replace(orig_scenario, new_scenario)
+              content = content.replace(orig_vus, new_vus)
+
+              with open('/patched/script.js', 'w') as f:
+                  f.write(content)
           image: docker.io/library/python:3.12-slim
           name: patch-script
           volumeMounts:
-          - mountPath: /patched
-            name: patched-script
+            - mountPath: /patched
+              name: patched-script
       volumes:
         - emptyDir: {}
           name: patched-script
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -4920,9 +4871,9 @@ metadata:
   name: mcp
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: mcp
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: mcp
     app.kubernetes.io/name: mcp
@@ -4933,14 +4884,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: mcp
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: mcp
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: mcp
         app.kubernetes.io/name: mcp
@@ -4950,10 +4899,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: mcp
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-mcp'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-mcp"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8011
               name: service
           env:
@@ -5007,6 +4955,7 @@ spec:
               memory: 500Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5015,9 +4964,9 @@ metadata:
   name: opamp-server
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: opamp-server
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: opamp-server
     app.kubernetes.io/name: opamp-server
@@ -5028,14 +4977,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: opamp-server
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: opamp-server
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: opamp-server
         app.kubernetes.io/name: opamp-server
@@ -5045,24 +4992,23 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: opamp-server
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-opamp-server'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-opamp-server"
           imagePullPolicy: IfNotPresent
           command:
             - /opamp-server
             - -no-tls
           ports:
-            
             - containerPort: 4320
               name: opamp
             - containerPort: 4321
               name: opamp-ui
-          env:
-            []
+          env: []
           resources:
             limits:
               memory: 65Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5071,9 +5017,9 @@ metadata:
   name: payment
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: payment
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: payment
     app.kubernetes.io/name: payment
@@ -5084,14 +5030,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: payment
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: payment
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: payment
         app.kubernetes.io/name: payment
@@ -5101,10 +5045,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: payment
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-payment'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-payment"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -5166,6 +5109,7 @@ spec:
             runAsUser: 1000
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5174,9 +5118,9 @@ metadata:
   name: product-catalog
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: product-catalog
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: product-catalog
     app.kubernetes.io/name: product-catalog
@@ -5187,14 +5131,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: product-catalog
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: product-catalog
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: product-catalog
         app.kubernetes.io/name: product-catalog
@@ -5204,10 +5146,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: product-catalog
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-product-catalog'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-product-catalog"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -5277,10 +5218,10 @@ spec:
               mountPath: /tmp
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 astronomy-db 5432; do echo waiting for astronomy-db; sleep
-            2; done;
+            - sh
+            - -c
+            - until nc -z -v -w30 astronomy-db 5432; do echo waiting for astronomy-db; sleep
+              2; done;
           image: busybox:latest
           name: wait-for-astronomy-db
       volumes:
@@ -5289,6 +5230,7 @@ spec:
             name: product-catalog-product-catalog-otel-config
         - name: tmp
           emptyDir: {}
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5297,9 +5239,9 @@ metadata:
   name: quote
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: quote
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: quote
     app.kubernetes.io/name: quote
@@ -5310,14 +5252,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: quote
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: quote
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: quote
         app.kubernetes.io/name: quote
@@ -5327,10 +5267,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: quote
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-quote'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-quote"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -5388,6 +5327,7 @@ spec:
             runAsUser: 33
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5396,9 +5336,9 @@ metadata:
   name: recommendation
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: recommendation
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: recommendation
     app.kubernetes.io/name: recommendation
@@ -5409,14 +5349,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: recommendation
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: recommendation
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: recommendation
         app.kubernetes.io/name: recommendation
@@ -5426,10 +5364,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: recommendation
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-recommendation'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-recommendation"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -5487,6 +5424,7 @@ spec:
               memory: 500Mi
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5495,9 +5433,9 @@ metadata:
   name: shipping
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: shipping
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: shipping
     app.kubernetes.io/name: shipping
@@ -5508,14 +5446,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: shipping
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: shipping
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: shipping
         app.kubernetes.io/name: shipping
@@ -5525,10 +5461,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: shipping
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-shipping'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-shipping"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8080
               name: service
           env:
@@ -5591,14 +5526,15 @@ spec:
               mountPath: /tmp
       initContainers:
         - command:
-          - sh
-          - -c
-          - until nc -z -v -w30 flagd 8013; do echo waiting for flagd; sleep 2; done
+            - sh
+            - -c
+            - until nc -z -v -w30 flagd 8013; do echo waiting for flagd; sleep 2; done
           image: busybox:1.36
           name: wait-for-flagd
       volumes:
         - name: tmp
           emptyDir: {}
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5607,9 +5543,9 @@ metadata:
   name: telemetry-docs
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: telemetry-docs
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: telemetry-docs
     app.kubernetes.io/name: telemetry-docs
@@ -5620,14 +5556,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: telemetry-docs
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: telemetry-docs
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: telemetry-docs
         app.kubernetes.io/name: telemetry-docs
@@ -5637,10 +5571,9 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: telemetry-docs
-          image: 'ghcr.io/open-telemetry/demo:3.0.0-telemetry-docs'
+          image: "ghcr.io/open-telemetry/demo:3.0.0-telemetry-docs"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 8000
               name: service
           env:
@@ -5694,6 +5627,7 @@ spec:
             runAsUser: 101
           volumeMounts:
       volumes:
+
 ---
 # Source: opentelemetry-demo/templates/component.yaml
 apiVersion: apps/v1
@@ -5702,9 +5636,9 @@ metadata:
   name: valkey-cart
   labels:
     helm.sh/chart: opentelemetry-demo-0.41.2
-    
+
     opentelemetry.io/name: valkey-cart
-    
+
     app.kubernetes.io/version: "3.0.0"
     app.kubernetes.io/component: valkey-cart
     app.kubernetes.io/name: valkey-cart
@@ -5715,14 +5649,12 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      
       opentelemetry.io/name: valkey-cart
   template:
     metadata:
       labels:
-        
         opentelemetry.io/name: valkey-cart
-        
+
         app.kubernetes.io/version: "3.0.0"
         app.kubernetes.io/component: valkey-cart
         app.kubernetes.io/name: valkey-cart
@@ -5737,14 +5669,12 @@ spec:
       serviceAccountName: otel-demo
       containers:
         - name: valkey-cart
-          image: 'ghcr.io/valkey-io/valkey:9.0.4-alpine3.23'
+          image: "ghcr.io/valkey-io/valkey:9.0.4-alpine3.23"
           imagePullPolicy: IfNotPresent
           ports:
-            
             - containerPort: 6379
               name: valkey-cart
-          env:
-            []
+          env: []
           resources:
             limits:
               memory: 20Mi

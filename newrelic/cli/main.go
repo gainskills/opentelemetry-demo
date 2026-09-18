@@ -212,6 +212,9 @@ func parseArgs() (Config, []string) {
 			case "ENABLE_DEMO_OTEL_COLLECTOR", "ENABLE_NRI_BUNDLE_OTEL_COLLECTOR", "DEMO_COLLECTOR":
 				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
 				cfg.EnableDemoOtelCollector = &b
+			case "ENABLE_OTEL_GATEWAY", "OTEL_GATEWAY":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableOtelGateway = &b
 			case "NEW_RELIC_OTLP_ENDPOINT":
 				cfg.OtlpEndpoint = val
 			case "TF_VAR_SUBACCOUNT_NAME":
@@ -270,6 +273,7 @@ GLOBAL FLAGS:
   --ENABLE_NRDOT              - Set to "false" to disable New Relic OTel Collector (NRDOT) (Default: true)
   --ENABLE_NRI_BUNDLE         - Set to "true" to enable New Relic Infrastructure Bundle (nri-bundle) (Default: false)
   --ENABLE_DEMO_OTEL_COLLECTOR - Set to "true" to enable the demo's own OTel Collector for app telemetry (Default: true when NRDOT disabled)
+  --ENABLE_OTEL_GATEWAY       - Set to "true" to enable Standalone OTel Collector Gateway for K8s events (Default: true when NRDOT disabled)
   --NEW_RELIC_OTLP_ENDPOINT   - New Relic OTLP endpoint for the demo's collector (Default: derived from region; override for a Pipeline Control gateway)
 
 INSTALL FLAGS:
@@ -331,6 +335,13 @@ func printCurrentState(cfg *Config) {
 			collectorStatus = ColorGreen + "Enabled" + ColorReset
 		}
 		fmt.Printf("  %sDemo OTel:%s  %s\n", ColorCyan, ColorReset, collectorStatus)
+	}
+	if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) || (cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway) {
+		gatewayStatus := ColorDim + "Disabled" + ColorReset
+		if cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway {
+			gatewayStatus = ColorGreen + "Enabled" + ColorReset
+		}
+		fmt.Printf("  %sOTel Gateway:%s %s\n", ColorCyan, ColorReset, gatewayStatus)
 	}
 	fmt.Println(ColorCyan + "=======================================================" + ColorReset)
 }

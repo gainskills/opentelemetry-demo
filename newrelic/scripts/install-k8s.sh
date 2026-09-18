@@ -155,4 +155,12 @@ if [ "$ENABLE_NRDOT" = "y" ]; then
   setup_pg_monitoring
 fi
 
+if [ "${ENABLE_OTEL_GATEWAY:-n}" = "y" ]; then
+  echo "Installing Standalone OpenTelemetry Collector Gateway..."
+  kubectl apply -f "$OTEL_GATEWAY_MANIFEST_PATH"
+fi
+
 echo "OpenTelemetry Demo installation completed successfully!"
+if [ "${ENABLE_OTEL_GATEWAY:-n}" = "y" ]; then
+  echo "  To stream Gateway events: kubectl logs -f -n $OTEL_DEMO_NAMESPACE deployment/otel-gateway"
+fi
