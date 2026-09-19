@@ -127,6 +127,20 @@ data:
             value: "opentelemetry-demo"
             action: upsert
 
+      # Log Body & Attribute Truncation / Pruning via OTTL:
+      # 1. Truncates all string attributes to 4096 bytes to avoid runaway attribute sizes.
+      # 2. Correctly truncates string log bodies exceeding 4096 characters to prevent oversized payloads.
+      # 3. Strips non-essential ephemeral debug attributes while preserving critical entity synthesis keys
+      #    (k8s.pod.uid, k8s.container.id, service.instance.id).
+      transform/trim_logs:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - truncate_all(attributes, 4096)
+              - set(body, Substring(body, 0, 4096)) where IsString(body) and Len(body) > 4096
+              - delete_key(attributes, "debug_trace_dump")
+
       batch:
         timeout: 5s
         send_batch_size: 500
@@ -148,7 +162,7 @@ data:
       pipelines:
         logs:
           receivers: [otlp, k8s_events]
-          processors: [memory_limiter, filter/k8s_events, transform/events, resource, batch]
+          processors: [memory_limiter, filter/k8s_events, transform/events, transform/trim_logs, resource, batch]
           exporters: [otlphttp/newrelic, debug]
         traces:
           receivers: [otlp]

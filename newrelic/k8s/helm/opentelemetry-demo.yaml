@@ -121,6 +121,10 @@ components:
       requests:
         memory: 100Mi
   load-generator:
+    # Exclude load-generator logs from newrelic-logging (Fluent Bit DaemonSet)
+    # to significantly reduce log ingestion volume during synthetic load experiments.
+    podAnnotations:
+      fluentbit.io/exclude: "true"
     # Full env list at upstream default values, kept explicit rather than
     # omitted. This chart's env is set as a plain array, which Helm
     # replaces wholesale rather than merging - so a future change that

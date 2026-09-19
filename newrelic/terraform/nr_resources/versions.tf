@@ -3,8 +3,9 @@ terraform {
 
   required_providers {
     newrelic = {
-      source  = "newrelic/newrelic"
-      version = "~> 3.0"
+      source = "newrelic/newrelic"
+      # newrelic_pipeline_cloud_rule was introduced in 3.68.0
+      version = ">= 3.68.0, < 4.0.0"
     }
   }
 }

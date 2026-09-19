@@ -19,6 +19,9 @@ newrelic-infrastructure:
   enableWindows: false
   enableProcessMetrics: false
   common:
+  # enableProcessMetrics is preferred
+  #   agentConfig:
+  #     metrics_process_sample_rate: -1
     config:
       namespaceSelector:
         matchExpressions:
@@ -88,6 +91,15 @@ newrelic-logging:
   sendMetrics: false
   nodeSelector:
     kubernetes.io/os: linux
+  # Fluent Bit custom filter: Drops high-frequency health check and probe logs
+  # (/healthz, /readyz, kube-probe) at the node level before they leave the host,
+  # saving worker node network egress and New Relic log ingestion volume.
+  fluentBit:
+    customFilters: |
+      [FILTER]
+          Name grep
+          Match *
+          Exclude log (GET /healthz|GET /readyz|kube-probe)
 
 nri-prometheus:
   enabled: false

@@ -210,4 +210,10 @@ variable "span_alert_map" {
       error_percent_threshold    = 1
     }
   }
-} 
+}
+
+variable "enable_pipeline_cloud_rules" {
+  description = "Whether to create Pipeline Cloud Rules and Metric Pruning Rules for ingestion cost optimization"
+  type        = bool
+  default     = true
+}
