@@ -32,7 +32,16 @@ NR_K8S_RENDER_PATH=${NR_K8S_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nr-k8s-ote
 NRI_BUNDLE_VALUES_PATH=${NRI_BUNDLE_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/nri-bundle.yaml"}
 NRI_BUNDLE_RENDER_PATH=${NRI_BUNDLE_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nri-bundle.yaml"}
 OTEL_DEMO_NRI_VALUES_PATH=${OTEL_DEMO_NRI_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/opentelemetry-demo-nri-collector.yaml"}
+OTEL_DEMO_PCG_VALUES_PATH=${OTEL_DEMO_PCG_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/opentelemetry-demo-pcg.yaml"}
 OTEL_GATEWAY_MANIFEST_PATH=${OTEL_GATEWAY_MANIFEST_PATH:-"$SCRIPT_DIR/../k8s/otel-collector-gateway.yaml"}
+APM_TEST_APPS_PATH=${APM_TEST_APPS_PATH:-"$SCRIPT_DIR/../k8s/apm-test-apps.yaml"}
+PCG_CHART_VERSION="2.5.0"
+AGENT_CONTROL_CHART_VERSION="1.7.20"
+PCG_RELEASE_NAME=newrelic-pcg
+AGENT_CONTROL_RELEASE_NAME=agent-control-deployment
+PCG_NAMESPACE=${PCG_NAMESPACE:-newrelic}
+PCG_VALUES_PATH=${PCG_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/pipeline-control-gateway.yaml"}
+AGENT_CONTROL_VALUES_PATH=${AGENT_CONTROL_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/agent-control-deployment.yaml"}
 CONFIG_GO_PATH=${CONFIG_GO_PATH:-"$SCRIPT_DIR/../cli/config.go"}
 
 # Docker variables
@@ -209,6 +218,34 @@ prompt_for_k8s_monitoring_components() {
   fi
   validate_yesno_answer "ENABLE_NRI_BUNDLE"
 
+  prompt_for_env_var "ENABLE_PCG" "Enable Pipeline Control Gateway (PCG without Flux)? (y/n, default: n)" false
+  if [ -z "${ENABLE_PCG:-}" ]; then
+    export ENABLE_PCG="n"
+  fi
+  validate_yesno_answer "ENABLE_PCG"
+
+  if [ "$ENABLE_PCG" = "y" ]; then
+    prompt_for_env_var "NEW_RELIC_GATEWAY_FLEET" "Enter New Relic Gateway Fleet Name (default: otel-demo-fleet)" false
+    if [ -z "${NEW_RELIC_GATEWAY_FLEET:-}" ]; then
+      export NEW_RELIC_GATEWAY_FLEET="otel-demo-fleet"
+    fi
+
+    prompt_for_env_var "ENABLE_APM_TEST_APPS" "Deploy dedicated New Relic APM test workloads (Python, Java, Node.js, C#)? (y/n, default: y)" false
+    if [ -z "${ENABLE_APM_TEST_APPS:-}" ]; then
+      export ENABLE_APM_TEST_APPS="y"
+    fi
+    validate_yesno_answer "ENABLE_APM_TEST_APPS"
+
+    prompt_for_env_var "ROUTE_DEMO_TO_PCG" "Route OpenTelemetry Demo services through PCG? (y/n, default: y)" false
+    if [ -z "${ROUTE_DEMO_TO_PCG:-}" ]; then
+      export ROUTE_DEMO_TO_PCG="y"
+    fi
+    validate_yesno_answer "ROUTE_DEMO_TO_PCG"
+  else
+    export ENABLE_APM_TEST_APPS="${ENABLE_APM_TEST_APPS:-n}"
+    export ROUTE_DEMO_TO_PCG="${ROUTE_DEMO_TO_PCG:-n}"
+  fi
+
   # Renamed from ENABLE_NRI_BUNDLE_OTEL_COLLECTOR: this switch controls the
   # demo chart's own collector and is independent of nri-bundle.
   if [ -z "${ENABLE_DEMO_OTEL_COLLECTOR:-}" ] && [ -n "${ENABLE_NRI_BUNDLE_OTEL_COLLECTOR:-}" ]; then
@@ -228,8 +265,8 @@ prompt_for_k8s_monitoring_components() {
     export ENABLE_OTEL_GATEWAY="${ENABLE_OTEL_GATEWAY:-n}"
   fi
 
-  if [ "$ENABLE_NRDOT" = "n" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "n" ]; then
-    echo "Warning: no collector enabled. The demo's services will export telemetry to an endpoint that does not exist and no application data will reach New Relic." >&2
+  if [ "$ENABLE_NRDOT" = "n" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "n" ] && [ "$ENABLE_PCG" = "n" ]; then
+    echo "Warning: no collector or gateway enabled. The demo's services will export telemetry to an endpoint that does not exist and no application data will reach New Relic." >&2
   fi
 }
 

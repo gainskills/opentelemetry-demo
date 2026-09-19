@@ -1,0 +1,289 @@
+# --------------------------------------------------------------------------------------------------
+# New Relic APM Test Workloads (Python, Java, Node.js, C# / .NET)
+#
+# PURPOSE:
+# Deploys 4 lightweight, dedicated test microservices to validate:
+# 1. Native New Relic APM Protocol:
+#    Directs native agent traffic to Pipeline Control Gateway's HTTP port 80:
+#    NEW_RELIC_HOST: pipeline-control-gateway.newrelic.svc.cluster.local
+# 2. Hybrid Protocol Mode:
+#    Directs APM agent OTLP export to Pipeline Control Gateway's OTLP port 4318:
+#    OTEL_EXPORTER_OTLP_ENDPOINT: http://pipeline-control-gateway.newrelic.svc.cluster.local:4318
+#
+# NAMESPACE:
+# Deployed into 'opentelemetry-demo' namespace to access shared newrelic-license-key secret.
+# --------------------------------------------------------------------------------------------------
+
+# ==============================================================================
+# 1. Python APM Workload (Native Protocol Mode)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-python-test
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-python-test
+    app.kubernetes.io/component: test-apm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-python-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-python-test
+    spec:
+      containers:
+        - name: apm-python
+          image: python:3.11-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install --no-cache-dir newrelic urllib3
+              cat <<'EOF' > /app.py
+              import os, time, urllib.request, newrelic.agent
+              newrelic.agent.initialize()
+              @newrelic.agent.background_task(name='simulate_transaction', group='Task')
+              def do_work():
+                  time.sleep(0.1)
+                  print("Python APM: Generated simulated transaction")
+              while True:
+                  do_work()
+                  time.sleep(5)
+              EOF
+              python /app.py
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-python-test"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+            - name: NEW_RELIC_PORT
+              value: "80"
+            - name: NEW_RELIC_LOG
+              value: "stdout"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+---
+# ==============================================================================
+# 2. Node.js APM Workload (Hybrid OTLP Mode)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-node-hybrid-test
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-node-hybrid-test
+    app.kubernetes.io/component: test-apm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-node-hybrid-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-node-hybrid-test
+    spec:
+      containers:
+        - name: apm-node
+          image: node:20-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /app && cd /app
+              npm init -y
+              npm install --save newrelic
+              cat <<'EOF' > index.js
+              const newrelic = require('newrelic');
+              function processJob() {
+                newrelic.startBackgroundTransaction('node-hybrid-job', () => {
+                  setTimeout(() => {
+                    newrelic.endTransaction();
+                    console.log("Node.js Hybrid APM: Generated background transaction via OTLP");
+                  }, 100);
+                });
+              }
+              setInterval(processJob, 5000);
+              EOF
+              node index.js
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-node-hybrid-test"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            # Hybrid mode: Sends OTLP data directly to PCG OTLP port 4318
+            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://pipeline-control-gateway.newrelic.svc.cluster.local:4318"
+            - name: NEW_RELIC_LOG
+              value: "stdout"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+---
+# ==============================================================================
+# 3. Java APM Workload (Native Protocol Mode)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-java-test
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-java-test
+    app.kubernetes.io/component: test-apm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-java-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-java-test
+    spec:
+      containers:
+        - name: apm-java
+          image: eclipse-temurin:17-jre-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /agent /app
+              wget -q -O /agent/newrelic.jar https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-agent.jar
+              cat <<'EOF' > /app/App.java
+              public class App {
+                public static void main(String[] args) throws Exception {
+                  System.out.println("Java APM test worker started");
+                  while (true) {
+                    Thread.sleep(5000);
+                    System.out.println("Java APM: simulated transaction loop");
+                  }
+                }
+              }
+              EOF
+              javac /app/App.java -d /app
+              java -javaagent:/agent/newrelic.jar -Dnewrelic.config.file=/dev/null -cp /app App
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-java-test"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+            - name: NEW_RELIC_PORT
+              value: "80"
+            - name: NEW_RELIC_LOG
+              value: "STDOUT"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+
+---
+# ==============================================================================
+# 4. C# / .NET APM Workload (Native Protocol Mode)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-dotnet-test
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-dotnet-test
+    app.kubernetes.io/component: test-apm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-dotnet-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-dotnet-test
+    spec:
+      containers:
+        - name: apm-dotnet
+          image: mcr.microsoft.com/dotnet/sdk:8.0-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /app && cd /app
+              dotnet new console -n Worker
+              cd Worker
+              dotnet add package NewRelic.Agent
+              cat <<'EOF' > Program.cs
+              using System;
+              using System.Threading;
+              class Program {
+                static void Main(string[] args) {
+                  Console.WriteLine("C# .NET APM test worker started");
+                  while (true) {
+                    Thread.Sleep(5000);
+                    Console.WriteLine("C# APM: simulated transaction loop");
+                  }
+                }
+              }
+              EOF
+              dotnet run
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-dotnet-test"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: CORECLR_ENABLE_PROFILING
+              value: "1"
+            - name: CORECLR_PROFILER
+              value: "{71DA0A04-7777-4EC6-9643-7D28B46E8A41}"
+            - name: NEW_RELIC_HOST
+              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+            - name: NEW_RELIC_PORT
+              value: "80"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi

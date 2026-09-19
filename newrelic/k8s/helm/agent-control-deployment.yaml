@@ -1,0 +1,34 @@
+# --------------------------------------------------------------------------------------------------
+# New Relic Agent Control Deployment - Values Configuration
+#
+# PURPOSE:
+# Deploys the New Relic Agent Control component in Configuration-Only mode (without Flux).
+# Agent Control connects to the New Relic control plane, receives pipeline rules configured
+# in the New Relic UI (Pipeline Control > Gateway > Fleet), and deploys them to the cluster
+# as a ConfigMap consumed by pipeline-control-gateway.
+#
+# SECURITY & PERMISSIONS:
+# Does NOT require cluster-admin privileges or Flux GitOps controllers. Requires only ConfigMap
+# creation/update permissions within its deployed namespace.
+# --------------------------------------------------------------------------------------------------
+
+nameOverride: "agent-control"
+
+# Cluster name matching the gateway and demo environment
+cluster: "opentelemetry-demo"
+
+# License key sourced from the shared Kubernetes Secret
+customSecretName: "newrelic-license-key"
+customSecretLicenseKey: "license-key"
+
+# Target namespace where the gateway and sub-agents reside
+subAgentsNamespace: "newrelic"
+
+# Agent control container resource allocations
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

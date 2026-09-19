@@ -143,8 +143,26 @@ if [ "$ENABLE_NRI_BUNDLE" = "y" ]; then
   install_or_upgrade_chart "$NRI_BUNDLE_RELEASE_NAME" "newrelic/nri-bundle" "$NRI_BUNDLE_CHART_VERSION" "$NRI_BUNDLE_VALUES_PATH" "$NRI_BUNDLE_NAMESPACE" "false" "global.region=$NEW_RELIC_REGION"
 fi
 
+if [ "$ENABLE_PCG" = "y" ]; then
+  echo "Installing Pipeline Control Gateway (PCG) & Agent Control..."
+  ensure_namespace "$PCG_NAMESPACE"
+  apply_license_secret "$PCG_NAMESPACE"
+  kubectl create secret generic newrelic-agent-control-secret \
+    --from-literal=fleet-name="$NEW_RELIC_GATEWAY_FLEET" \
+    -n "$PCG_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+  install_or_upgrade_chart "$AGENT_CONTROL_RELEASE_NAME" "newrelic/agent-control-deployment" "$AGENT_CONTROL_CHART_VERSION" "$AGENT_CONTROL_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" "global.region=$NEW_RELIC_REGION"
+  install_or_upgrade_chart "$PCG_RELEASE_NAME" "newrelic/pipeline-control-gateway" "$PCG_CHART_VERSION" "$PCG_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" "global.region=$NEW_RELIC_REGION"
+
+  if [ "${ENABLE_APM_TEST_APPS:-n}" = "y" ]; then
+    echo "Deploying New Relic APM test workloads (Python, Java, Node.js, C#)..."
+    kubectl apply -f "$APM_TEST_APPS_PATH"
+  fi
+fi
+
 echo "Installing OpenTelemetry Demo..."
-if [ "$ENABLE_NRDOT" != "y" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "y" ]; then
+if [ "${ROUTE_DEMO_TO_PCG:-n}" = "y" ]; then
+  install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_PCG_VALUES_PATH"
+elif [ "$ENABLE_NRDOT" != "y" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "y" ]; then
   install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
 else
   install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"
@@ -163,4 +181,12 @@ fi
 echo "OpenTelemetry Demo installation completed successfully!"
 if [ "${ENABLE_OTEL_GATEWAY:-n}" = "y" ]; then
   echo "  To stream Gateway events: kubectl logs -f -n $OTEL_DEMO_NAMESPACE deployment/otel-gateway"
+fi
+if [ "${ENABLE_PCG:-n}" = "y" ]; then
+  echo "  Pipeline Control Gateway is running in namespace: $PCG_NAMESPACE"
+  echo "  To inspect PCG logs: kubectl logs -f -n $PCG_NAMESPACE deployment/pipeline-control-gateway"
+  if [ "${ENABLE_APM_TEST_APPS:-n}" = "y" ]; then
+    echo "  APM test workloads deployed in namespace: $OTEL_DEMO_NAMESPACE"
+    echo "  To check APM apps: kubectl get pods -n $OTEL_DEMO_NAMESPACE -l app.kubernetes.io/component=test-apm"
+  fi
 fi
