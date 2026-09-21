@@ -59,6 +59,34 @@ func promptUser(label string, validator func(string) error) string {
 	}
 }
 
+func promptUserWithDefault(label, defaultVal string) string {
+	fmt.Printf("\x1b[?2004l")
+	defer fmt.Printf("\x1b[?2004h")
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("%s (default: %s): ", label, defaultVal)
+	rawInput, err := reader.ReadString('\n')
+	if err != nil {
+		return defaultVal
+	}
+	cleaned := strings.TrimSpace(rawInput)
+	if cleaned == "" {
+		return defaultVal
+	}
+	return cleaned
+}
+
+func promptUserOptional(label string) string {
+	fmt.Printf("\x1b[?2004l")
+	defer fmt.Printf("\x1b[?2004h")
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("%s: ", label)
+	rawInput, err := reader.ReadString('\n')
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(rawInput)
+}
+
 func promptBool(label string) bool {
 	return promptBoolWithDefault(label, false)
 }
@@ -86,6 +114,53 @@ func promptBoolWithDefault(label string, defaultVal bool) bool {
 		if text == "n" || text == "no" {
 			return false
 		}
+	}
+}
+
+type ChoiceOption struct {
+	Key  string
+	Desc string
+}
+
+func promptChoice(title string, defaultIdx int, options []ChoiceOption) string {
+	fmt.Printf("\x1b[?2004l")
+	defer fmt.Printf("\x1b[?2004h")
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Println(title)
+		for i, opt := range options {
+			idx := i + 1
+			if idx == defaultIdx {
+				fmt.Printf("  [%d] %s (default)\n", idx, opt.Desc)
+			} else {
+				fmt.Printf("  [%d] %s\n", idx, opt.Desc)
+			}
+		}
+		fmt.Printf("Enter choice [1-%d] (default: %d): ", len(options), defaultIdx)
+		text, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println()
+			if defaultIdx >= 1 && defaultIdx <= len(options) {
+				return options[defaultIdx-1].Key
+			}
+			return ""
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			if defaultIdx >= 1 && defaultIdx <= len(options) {
+				return options[defaultIdx-1].Key
+			}
+		}
+		var num int
+		if _, err := fmt.Sscanf(text, "%d", &num); err == nil && num >= 1 && num <= len(options) {
+			return options[num-1].Key
+		}
+		for _, opt := range options {
+			if strings.EqualFold(text, opt.Key) {
+				return opt.Key
+			}
+		}
+		fmt.Printf("Invalid choice '%s'. Please select 1-%d.\n", text, len(options))
 	}
 }
 
@@ -165,6 +240,10 @@ func saveConfigToEnv(cfg *Config) {
 		"BROWSER_ACCOUNT_ID":                cfg.BrowserAccountID,
 		"BROWSER_TRUST_KEY":                 cfg.BrowserTrustKey,
 		"BROWSER_AGENT_ID":                  cfg.BrowserAgentID,
+		"NEW_RELIC_CLIENT_ID":               cfg.ClientId,
+		"NEW_RELIC_CLIENT_SECRET":           cfg.ClientSecret,
+		"NEW_RELIC_ORGANIZATION_ID":         cfg.OrganizationId,
+		"NEW_RELIC_GATEWAY_FLEET":           cfg.PcgFleetName,
 	}
 
 	var lines []string

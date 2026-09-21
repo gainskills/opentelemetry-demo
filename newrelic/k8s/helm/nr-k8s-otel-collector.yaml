@@ -33,9 +33,6 @@ images:
 # Second --config merges in internal telemetry for New Relic's Collector Observability UI.
 # https://docs.newrelic.com/docs/opentelemetry/collector-observability/collector-observability/
 daemonset:
-  # Explicitly disable the DaemonSet collector to run in Deployment-only mode.
-  # This prevents running node-local collector pods and avoids duplicate metrics/logs.
-  enabled: false
   # Update to match otlp_http/newrelic's endpoint if global.region is EU/JP.
   envs:
     - name: INTERNAL_TELEMETRY_OTLP_ENDPOINT

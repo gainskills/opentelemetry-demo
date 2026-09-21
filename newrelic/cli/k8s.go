@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"text/template"
+	"time"
 )
 
 // fetchBrowserConfigFromTF retrieves browser monitoring metadata from Terraform outputs.
@@ -102,15 +103,22 @@ func handleK8s(action string, cfg *Config) {
 		// webhook stalls pod admission cluster-wide on later installs.
 		nriNS := Charts["nri-bundle"].NS
 		uninstallRelease(Charts["nri-bundle"].Name, nriNS, true)
+		pcgNS := Charts["pcg"].NS
+		uninstallRelease(Charts["pcg"].Name, pcgNS, false)
+		uninstallRelease(Charts["agent-control"].Name, pcgNS, false)
 		exec.Command("kubectl", "delete",
 			"mutatingwebhookconfiguration,validatingwebhookconfiguration,clusterrole,clusterrolebinding",
 			"-l", "app.kubernetes.io/instance="+Charts["nri-bundle"].Name, "--ignore-not-found").Run()
-		if _, err := os.Stat(Paths["otel-gateway-manifest"]); err == nil {
-			runCommand("kubectl", []string{"delete", "-f", Paths["otel-gateway-manifest"], "--ignore-not-found"}, nil)
+		if _, err := os.Stat(Paths["apm-test-apps"]); err == nil {
+			runCommand("kubectl", []string{"delete", "-f", Paths["apm-test-apps"], "--ignore-not-found"}, nil)
 		}
+		runCommand("kubectl", []string{"delete", "secret", "newrelic-agent-control-secret", "-n", pcgNS, "--ignore-not-found"}, nil)
 		runCommand("kubectl", []string{"delete", "ns", ns, "--ignore-not-found"}, nil)
 		if nriNS != ns {
 			runCommand("kubectl", []string{"delete", "ns", nriNS, "--ignore-not-found"}, nil)
+		}
+		if pcgNS != ns && pcgNS != nriNS {
+			runCommand("kubectl", []string{"delete", "ns", pcgNS, "--ignore-not-found"}, nil)
 		}
 		return
 	}
@@ -146,21 +154,177 @@ func handleK8s(action string, cfg *Config) {
 		installChart("nri-bundle", []string{Paths["nri-bundle-values"]}, "global.region="+strings.ToLower(cfg.Region))
 	}
 
-	otelValues := []string{Paths["otel-values"]}
-	if cfg.EnableBrowser != nil && *cfg.EnableBrowser {
-		otelValues = append(otelValues, Paths["otel-browser-values"])
-	}
-	otelSets := []string{}
-	if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
-		otelValues = append(otelValues, Paths["otel-nri-values"])
-		otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
-	}
-	installChart("otel-demo", otelValues, otelSets...)
+	if cfg.EnablePcg != nil && *cfg.EnablePcg {
+		pcgNS := Charts["pcg"].NS
+		exec.Command("kubectl", "create", "ns", pcgNS).Run()
+		applyLicenseSecret(pcgNS, cfg.LicenseKey)
 
-	if cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway {
-		fmt.Println("\n>>> Installing Standalone OpenTelemetry Collector Gateway...")
-		runCommand("kubectl", []string{"apply", "-f", Paths["otel-gateway-manifest"]}, nil)
-		fmt.Printf("  To stream Gateway events: kubectl logs -f -n %s deployment/otel-gateway\n", ns)
+		fleetId := cfg.PcgFleetName
+		if fleetId == "" {
+			fleetId = "otel-demo-fleet"
+		}
+		orgId := cfg.OrganizationId
+		if orgId == "" {
+			orgId = cfg.AccountId
+		}
+
+		if cfg.ClientId != "" && cfg.ClientSecret != "" && orgId != "" {
+			fmt.Println("\n>>> Installing Agent Control Deployment (with System Identity credentials)...")
+			installChart("agent-control", []string{Paths["agent-control-values"]},
+				"global.region="+strings.ToLower(cfg.Region),
+				"systemIdentity.organizationId="+orgId,
+				"systemIdentity.parentIdentity.clientId="+cfg.ClientId,
+				"systemIdentity.parentIdentity.clientSecret="+cfg.ClientSecret,
+				"config.fleet_control.fleet_id="+fleetId,
+				"config.cdEnabled=false",
+				"subAgentsNamespace="+pcgNS,
+			)
+
+			fmt.Println("\n>>> Waiting up to 30s for Agent Control to create pipeline-control-gateway-custom-config ConfigMap...")
+			found := false
+			for waited := 0; waited < 30; waited += 3 {
+				cmd := exec.Command("kubectl", "get", "configmap", "pipeline-control-gateway-custom-config", "-n", pcgNS)
+				if err := cmd.Run(); err == nil {
+					fmt.Printf("Found pipeline-control-gateway-custom-config ConfigMap in namespace %s.\n", pcgNS)
+					found = true
+					break
+				}
+				time.Sleep(3 * time.Second)
+			}
+
+			if found {
+				fmt.Printf("\n>>> Deploying PCG with custom ConfigMap from Agent Control (Fleet: %s)...\n", fleetId)
+				installChart("pcg", []string{Paths["pcg-values"]},
+					"global.region="+strings.ToLower(cfg.Region),
+					"fleet_id="+fleetId,
+					"deployment.customConfigMap=pipeline-control-gateway-custom-config",
+				)
+			} else {
+				fmt.Println("\n>>> Warning: pipeline-control-gateway-custom-config was not created within 30s.")
+				fmt.Println(">>> Deploying PCG with in-cluster configuration rules as fallback...")
+				installChart("pcg", []string{Paths["pcg-values"]},
+					"global.region="+strings.ToLower(cfg.Region),
+					"fleet_id="+fleetId,
+				)
+			}
+		} else {
+			fmt.Println("\n>>> Note: NEW_RELIC_CLIENT_ID / NEW_RELIC_CLIENT_SECRET not provided. Skipping Agent Control fleet daemon (PCG will run with in-cluster ConfigMap rules).")
+			installChart("pcg", []string{Paths["pcg-values"]},
+				"global.region="+strings.ToLower(cfg.Region),
+				"fleet_id="+fleetId,
+			)
+		}
+	}
+
+	if cfg.EnableOtelDemoApps == nil || *cfg.EnableOtelDemoApps {
+		otelValues := []string{Paths["otel-values"]}
+		if cfg.EnableBrowser != nil && *cfg.EnableBrowser {
+			otelValues = append(otelValues, Paths["otel-browser-values"])
+		}
+		otelSets := []string{}
+		switch cfg.OtelDemoDest {
+		case "pcg":
+			otelValues = append(otelValues, Paths["otel-pcg-values"])
+		case "nrdot":
+			// Uses standard base values which route to NRDOT gateway
+		case "otel-collector", "saas":
+			otelValues = append(otelValues, Paths["otel-nri-values"])
+			otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
+		default:
+			if cfg.RouteDemoToPcg != nil && *cfg.RouteDemoToPcg {
+				otelValues = append(otelValues, Paths["otel-pcg-values"])
+			} else if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
+				otelValues = append(otelValues, Paths["otel-nri-values"])
+				otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
+			}
+		}
+		installChart("otel-demo", otelValues, otelSets...)
+	} else {
+		fmt.Println("\n>>> Skipping OpenTelemetry Demo microservices installation (ENABLE_OTEL_DEMO_APPS=false).")
+	}
+
+	if cfg.EnableApmTestApps != nil && *cfg.EnableApmTestApps {
+		applyApmTestConfig(ns, cfg)
+
+		if cfg.EnableApmNativeApps != nil && *cfg.EnableApmNativeApps {
+			fmt.Printf("\n>>> Deploying New Relic APM Native test workloads (destination: %s)...\n", cfg.ApmNativeDest)
+			runCommand("kubectl", []string{"apply", "-f", Paths["apm-test-apps"], "-l", "app.kubernetes.io/component=native-apm"}, nil)
+		}
+
+		if cfg.EnableApmHybridApps != nil && *cfg.EnableApmHybridApps {
+			fmt.Printf("\n>>> Deploying New Relic APM Hybrid test workloads (destination: %s)...\n", cfg.ApmHybridDest)
+			runCommand("kubectl", []string{"apply", "-f", Paths["apm-test-apps"], "-l", "app.kubernetes.io/component=hybrid-apm"}, nil)
+		}
+	}
+}
+
+// applyApmTestConfig creates or updates the apm-test-config ConfigMap with the chosen endpoints
+func applyApmTestConfig(namespace string, cfg *Config) {
+	defaultNrHost := "collector.newrelic.com"
+	defaultNrPort := "443"
+	defaultNrSSL := "true"
+	defaultOtlpEndpoint := otlpEndpoint(cfg)
+	defaultOtlpProtocol := "http/protobuf"
+
+	switch strings.ToLower(cfg.Region) {
+	case "eu":
+		defaultNrHost = "collector.eu01.nr-data.net"
+	case "jp":
+		defaultNrHost = "collector.jp01.nr-data.net"
+	}
+
+	nativeNrHost := defaultNrHost
+	nativeNrPort := defaultNrPort
+	nativeNrSSL := defaultNrSSL
+
+	if cfg.ApmNativeDest == "pcg" {
+		nativeNrHost = "pipeline-control-gateway.newrelic.svc.cluster.local"
+		nativeNrPort = "80"
+		nativeNrSSL = "false"
+	}
+
+	hybridNrHost := defaultNrHost
+	hybridNrPort := defaultNrPort
+	hybridNrSSL := defaultNrSSL
+	hybridOtlpEndpoint := defaultOtlpEndpoint
+	hybridOtlpProtocol := defaultOtlpProtocol
+
+	if cfg.ApmHybridDest == "pcg" {
+		// Hybrid mode uses SaaS for agent registration/entity synthesis (TLS required by agents)
+		// and routes OTLP trace spans through PCG port 4318
+		hybridNrHost = defaultNrHost
+		hybridNrPort = defaultNrPort
+		hybridNrSSL = defaultNrSSL
+		hybridOtlpEndpoint = "http://pipeline-control-gateway.newrelic.svc.cluster.local:4318"
+		hybridOtlpProtocol = "http/protobuf"
+	}
+
+	fmt.Printf("\n>>> Applying APM test configuration ConfigMap...\n")
+	fmt.Printf("    Native APM: host=%s:%s (ssl=%s)\n", nativeNrHost, nativeNrPort, nativeNrSSL)
+	fmt.Printf("    Hybrid APM: host=%s:%s, otlp=%s\n", hybridNrHost, hybridNrPort, hybridOtlpEndpoint)
+
+	createCmd := exec.Command("kubectl", "create", "configmap", "apm-test-config",
+		"-n", namespace,
+		"--from-literal=NATIVE_NEW_RELIC_HOST="+nativeNrHost,
+		"--from-literal=NATIVE_NEW_RELIC_PORT="+nativeNrPort,
+		"--from-literal=NATIVE_NEW_RELIC_SSL="+nativeNrSSL,
+		"--from-literal=HYBRID_NEW_RELIC_HOST="+hybridNrHost,
+		"--from-literal=HYBRID_NEW_RELIC_PORT="+hybridNrPort,
+		"--from-literal=HYBRID_NEW_RELIC_SSL="+hybridNrSSL,
+		"--from-literal=OTEL_EXPORTER_OTLP_ENDPOINT="+hybridOtlpEndpoint,
+		"--from-literal=OTEL_EXPORTER_OTLP_PROTOCOL="+hybridOtlpProtocol,
+		"--dry-run=client", "-o", "yaml")
+	out, err := createCmd.Output()
+	if err != nil {
+		fmt.Printf("Error generating ConfigMap manifest: %v\n", err)
+		return
+	}
+	applyCmd := exec.Command("kubectl", "apply", "-f", "-")
+	applyCmd.Stdin = bytes.NewReader(out)
+	applyCmd.Stdout = os.Stdout
+	applyCmd.Stderr = os.Stderr
+	if err := applyCmd.Run(); err != nil {
+		fmt.Printf("Error applying APM test configmap: %v\n", err)
 	}
 }
 

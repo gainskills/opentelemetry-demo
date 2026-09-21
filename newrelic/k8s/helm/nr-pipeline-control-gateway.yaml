@@ -1,0 +1,131 @@
+# --------------------------------------------------------------------------------------------------
+# New Relic Pipeline Control Gateway (PCG) - Values Configuration
+#
+# PURPOSE:
+# Deploys the Pipeline Control Gateway inside the Kubernetes cluster.
+# The gateway processes, filters, transforms, and samples telemetry (metrics, traces, logs)
+# inside your VPC before exporting to New Relic, saving network egress and NAT gateway costs.
+#
+# PROTOCOL SUPPORT:
+# - Port 80 / 8080: Native New Relic APM Agent Protocol (HTTP/HTTPS collector proxy)
+# - Port 4317: OpenTelemetry Protocol (OTLP) gRPC
+# - Port 4318: OpenTelemetry Protocol (OTLP) HTTP
+#
+# MANAGEMENT MODE:
+# Configuration-Only (without Flux). Pipeline rules (sampling, filtering, transforms) are synced
+# via ConfigMap from the New Relic UI by agent-control-deployment.
+# --------------------------------------------------------------------------------------------------
+
+fullnameOverride: "pipeline-control-gateway"
+
+# Cluster name to associate with this gateway in New Relic
+cluster: "opentelemetry-demo"
+
+# License key sourced from the shared Kubernetes Secret
+customSecretName: "newrelic-license-key"
+customSecretLicenseKey: "license-key"
+
+# Port mappings: Exposes both native New Relic APM and standard OTLP ingestion
+ports:
+  nrHttp: 80
+  nrHttpTarget: 8080
+  otlpHttp: 4318
+  otlpGrpc: 4317
+  healthHttp: 13133
+  prometheus: 8888
+
+# Horizontal Pod Autoscaling: Scales the gateway pods based on CPU consumption
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 60
+
+# Config watcher sidecar: Monitors the ConfigMap managed by agent-control-deployment
+# and automatically reloads the gateway when rules change in the New Relic UI.
+configWatcher:
+  enabled: true
+  image: bitnami/kubectl:latest
+  imagePullPolicy: IfNotPresent
+  gracePeriod: 30
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+# Resources for the gateway container
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+# ==============================================================================
+# Pipeline Control Gateway Receivers & Production Endpoints
+# Overrides upstream Helm chart defaults (which hardcode staging-collector)
+# ==============================================================================
+generated:
+  receivers:
+    "prometheus/monitoring": null
+    nrproprietaryreceiver:
+      nr_host: "collector.newrelic.com"
+      endpoints:
+        infra_event_api_endpoint: "https://infra-api.newrelic.com"
+        log_api_endpoint: "https://log-api.newrelic.com"
+        event_api_endpoint: "https://insights-collector.newrelic.com"
+        traces_endpoint: "https://trace-api.newrelic.com"
+        metrics_endpoint: "https://metric-api.newrelic.com"
+
+# ==============================================================================
+# Pipeline Control Gateway Processors & Rule Filters
+# Comment / uncomment the filter blocks below to toggle health check dropping
+# ==============================================================================
+  processors:
+    # --- Health Check Trace / Span Filter ---
+    # Uncomment the 'traces' block below to drop health check spans
+    filter/Traces:
+      error_mode: ignore
+      # traces:
+      #   span:
+      #     - 'attributes["healthcheck"] == "true"'
+      #     - 'attributes["http.route"] == "/healthz"'
+      #     - 'name == "WebTransaction/Custom/healthz"'
+
+    # --- Health Check Metric Filter ---
+    # Uncomment the 'metrics' block below to drop health check metrics
+    filter/Metrics:
+      error_mode: ignore
+      # metrics:
+      #   metric:
+      #     - 'name == "Custom/App/HealthStatus"'
+
+    # --- Health Check Log Filter ---
+    # Uncomment the 'logs' block below to drop health check logs
+    filter/Logs:
+      error_mode: ignore
+      # logs:
+      #   log_record:
+      #     - 'IsMatch(body, ".*[Hh]ealth check.*")'
+
+# ==============================================================================
+# Pipeline Control Gateway Exporters
+# Overrides upstream Helm chart default which hardcodes /v1/traces in otlphttp,
+# causing /v1/traces/v1/metrics 404 errors during internal metrics export
+# ==============================================================================
+  exporters:
+    otlphttp:
+      endpoint: "https://otlp.nr-data.net"
+      headers:
+        api-key: "${env:NEW_RELIC_LICENSE_KEY}"
+
+# ==============================================================================
+# Pipeline Control Gateway Service Pipelines
+# Disables internal Prometheus self-monitoring export pipeline
+# ==============================================================================
+  service:
+    pipelines:
+      "metrics/monitoring": null

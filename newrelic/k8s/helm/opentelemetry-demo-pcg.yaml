@@ -2,7 +2,7 @@
 # OpenTelemetry Demo Values Overlay for Pipeline Control Gateway (PCG)
 #
 # PURPOSE:
-# Values overlay applied on top of opentelemetry-demo.yaml when routing demo application telemetry
+# Values overlay applied on top of opentelemetry-demo-base.yaml when routing demo application telemetry
 # directly through the in-cluster Pipeline Control Gateway (PCG).
 #
 # HOW IT WORKS:

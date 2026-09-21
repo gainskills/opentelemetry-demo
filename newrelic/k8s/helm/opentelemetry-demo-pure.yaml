@@ -1,0 +1,267 @@
+# Values overlay applied on top of opentelemetry-demo-base.yaml when NRDOT is
+# disabled, so the demo's own OTel Collector ships application telemetry
+# straight to New Relic's OTLP endpoint.
+#
+# Helm merges maps key-by-key but REPLACES lists wholesale, so every list this
+# file touches must be re-declared in full. validate-k8s-charts.sh diffs the
+# base and overlay renders to catch drift between the two files.
+default:
+  # Full copy of opentelemetry-demo-base.yaml's default.env with OTEL_COLLECTOR_NAME
+  # pointed at the demo chart's own collector Service instead of the NRDOT
+  # gateway. Dropping any entry here silently removes it from every service.
+  env:
+    - name: OTEL_SERVICE_NAME
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: "metadata.labels['app.kubernetes.io/component']"
+    - name: OTEL_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: OTEL_POD_UID
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.uid
+    - name: OTEL_K8S_CONTAINER_NAME
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: "metadata.labels['app.kubernetes.io/component']"
+    - name: OTEL_NAMESPACE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: OTEL_CLUSTER_NAME
+      value: opentelemetry-demo
+    - name: OTEL_COLLECTOR_NAME
+      value: otel-collector
+    - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+      value: delta
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: >-
+        service.name=$(OTEL_SERVICE_NAME),
+        service.namespace=opentelemetry-demo,
+        service.version={{ .Chart.AppVersion }},
+        service.instance.id=$(OTEL_POD_NAME),
+        k8s.container.name=$(OTEL_K8S_CONTAINER_NAME),
+        k8s.pod.name=$(OTEL_POD_NAME),
+        k8s.pod.uid=$(OTEL_POD_UID),
+        k8s.namespace.name=$(OTEL_NAMESPACE_NAME),
+        k8s.cluster.name=$(OTEL_CLUSTER_NAME)
+    - name: OTEL_METRIC_EXPORT_INTERVAL
+      value: "10000"
+
+# ==============================================================================
+# WORKLOAD ARCHITECTURE MODE: DEPLOYMENT vs. DAEMONSET
+# ==============================================================================
+# The upstream opentelemetry-collector chart uses a single 'mode' field to toggle
+# between Deployment and DaemonSet. A single release can run EITHER Deployment mode
+# OR DaemonSet mode.
+#
+# Below is the active DEPLOYMENT mode configuration, followed by the complete,
+# ready-to-toggle DAEMONSET mode configuration block.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# [ACTIVE] DEPLOYMENT MODE CONFIGURATION
+# ------------------------------------------------------------------------------
+# Role: Central cluster-wide OTLP gateway and K8s API event watcher (1 replica).
+# Best for: application telemetry + filtered K8s cluster events.
+# ------------------------------------------------------------------------------
+opentelemetry-collector:
+  enabled: true
+  mode: deployment
+
+  # ClusterRole permissions required for k8s_events receiver in deployment mode
+  clusterRole:
+    create: true
+    rules:
+      - apiGroups: ["", "events.k8s.io"]
+        resources: ["events"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: [""]
+        resources: ["pods", "namespaces", "nodes"]
+        verbs: ["get", "list", "watch"]
+
+  service:
+    internalTrafficPolicy: Local
+  extraEnvs:
+    - name: NEW_RELIC_LICENSE_KEY
+      valueFrom:
+        secretKeyRef:
+          name: newrelic-license-key
+          key: license-key
+  config:
+    receivers:
+      k8s_events:
+        auth_type: serviceAccount
+
+    processors:
+      # Event Filtering: Drop Normal/Info K8s events and system namespaces
+      filter/k8s_events:
+        error_mode: ignore
+        logs:
+          log_record:
+            - 'attributes["k8s.event.name"] != nil and severity_number < SEVERITY_NUMBER_WARN'
+            - 'attributes["k8s.namespace.name"] == "kube-system"'
+            - 'attributes["k8s.namespace.name"] == "kube-public"'
+            - 'attributes["k8s.namespace.name"] == "kube-node-lease"'
+            - 'attributes["k8s.namespace.name"] == "newrelic"'
+
+      # Promote K8s event attributes to resource attributes for New Relic UI entity linking
+      transform/events:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - set(resource.attributes["k8s.namespace.name"], attributes["k8s.namespace.name"]) where attributes["k8s.namespace.name"] != nil
+              - set(resource.attributes["k8s.pod.name"], attributes["k8s.object.name"]) where attributes["k8s.object.kind"] == "Pod"
+              - set(resource.attributes["k8s.node.name"], attributes["k8s.object.name"]) where attributes["k8s.object.kind"] == "Node"
+
+      # Attach cluster name to link telemetry in New Relic
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: "opentelemetry-demo"
+            action: upsert
+
+      # Truncate large log bodies and string attributes to prevent oversized payloads
+      transform/trim_logs:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - truncate_all(attributes, 4096)
+              - set(body, Substring(body, 0, 4096)) where IsString(body) and Len(body) > 4096
+              - delete_key(attributes, "debug_trace_dump")
+
+    exporters:
+      otlphttp/newrelic:
+        # US endpoint by default. install-k8s.sh and the Go CLI override this
+        # from NEW_RELIC_OTLP_ENDPOINT for EU/JP accounts or to route through a
+        # Pipeline Control gateway.
+        endpoint: https://otlp.nr-data.net:4318
+        headers:
+          api-key: ${env:NEW_RELIC_LICENSE_KEY}
+    service:
+      pipelines:
+        traces:
+          exporters:
+            - otlphttp/newrelic
+            - otlp_grpc/jaeger
+            - debug
+            - span_metrics
+        metrics:
+          exporters:
+            - otlphttp/newrelic
+            - otlp_http/prometheus
+            - debug
+        logs:
+          receivers:
+            - otlp
+            - k8s_events
+          processors:
+            - memory_limiter
+            - filter/k8s_events
+            - transform/events
+            - resource
+            - transform/trim_logs
+            - batch
+          exporters:
+            - otlphttp/newrelic
+            - opensearch
+            - debug
+
+# ------------------------------------------------------------------------------
+# [INACTIVE] DAEMONSET MODE CONFIGURATION (READY-TO-TOGGLE TEMPLATE)
+# ------------------------------------------------------------------------------
+# Role: Node-local telemetry agent on every worker node (1 pod per node).
+# Best for: host metrics (CPU/RAM/disk), kubelet container metrics, and node logs.
+#
+# To switch to DaemonSet mode:
+#   1. Comment out the DEPLOYMENT MODE block above.
+#   2. Uncomment the DAEMONSET MODE block below.
+#
+# NOTE: k8s_events is intentionally EXCLUDED from this mode because running
+# k8s_events inside a DaemonSet causes every node to watch the K8s API server
+# and emit duplicate events for every cluster event.
+# ------------------------------------------------------------------------------
+# opentelemetry-collector:
+#   enabled: true
+#   mode: daemonset
+#
+#   # Built-in presets for node-level DaemonSet monitoring:
+#   presets:
+#     # Scrapes node hardware metrics (/proc and /sys) via hostmetrics receiver
+#     hostMetrics:
+#       enabled: true
+#     # Scrapes container metrics from local node's kubelet via kubeletstats receiver
+#     kubeletMetrics:
+#       enabled: true
+#     # Enriches spans, metrics, and logs with k8s pod/node metadata
+#     kubernetesAttributes:
+#       enabled: true
+#     # Tails /var/log/pods/*.log directly from node disk (optional)
+#     logsCollection:
+#       enabled: false
+#
+#   service:
+#     internalTrafficPolicy: Local
+#   extraEnvs:
+#     - name: NEW_RELIC_LICENSE_KEY
+#       valueFrom:
+#         secretKeyRef:
+#           name: newrelic-license-key
+#           key: license-key
+#   config:
+#     processors:
+#       # Attach cluster name to link telemetry in New Relic
+#       resource:
+#         attributes:
+#           - key: k8s.cluster.name
+#             value: "opentelemetry-demo"
+#             action: upsert
+#
+#       # Truncate large log bodies and string attributes
+#       transform/trim_logs:
+#         error_mode: ignore
+#         log_statements:
+#           - context: log
+#             statements:
+#               - truncate_all(attributes, 4096)
+#               - set(body, Substring(body, 0, 4096)) where IsString(body) and Len(body) > 4096
+#               - delete_key(attributes, "debug_trace_dump")
+#
+#     exporters:
+#       otlphttp/newrelic:
+#         endpoint: https://otlp.nr-data.net:4318
+#         headers:
+#           api-key: ${env:NEW_RELIC_LICENSE_KEY}
+#
+#     service:
+#       pipelines:
+#         traces:
+#           exporters:
+#             - otlphttp/newrelic
+#             - otlp_grpc/jaeger
+#             - debug
+#             - span_metrics
+#         metrics:
+#           # In daemonset mode, presets automatically inject hostmetrics and kubeletstats receivers
+#           exporters:
+#             - otlphttp/newrelic
+#             - otlp_http/prometheus
+#             - debug
+#         logs:
+#           receivers:
+#             - otlp
+#           processors:
+#             - memory_limiter
+#             - resource
+#             - transform/trim_logs
+#             - batch
+#           exporters:
+#             - otlphttp/newrelic
+#             - opensearch
+#             - debug

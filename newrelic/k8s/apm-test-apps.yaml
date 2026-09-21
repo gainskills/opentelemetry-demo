@@ -1,39 +1,86 @@
 # --------------------------------------------------------------------------------------------------
-# New Relic APM Test Workloads (Python, Java, Node.js, C# / .NET)
+# New Relic APM Test Microservices (Python, Node.js, Java, C# / .NET)
 #
 # PURPOSE:
-# Deploys 4 lightweight, dedicated test microservices to validate:
-# 1. Native New Relic APM Protocol:
+# Deploys 8 dedicated microservices (4 Native APM + 4 Hybrid OTLP) designed to emit:
+#   1. APM Metrics: Throughput (rpm), response time / latency, error percentage, and custom metrics
+#      (e.g., Custom/App/HealthStatus).
+#   2. Traces: Real Web Transactions, distributed traces, HTTP client spans, and error traces.
+#   3. Logs: Structured application logs with Logs-in-Context and configurable debug verbosity.
+#
+# PIPELINE CONTROL GATEWAY (PCG) TEST SCENARIOS:
+#   - Drop Filter: Endpoint /healthz emits metric Custom/App/HealthStatus, transaction WebTransaction,
+#     and healthcheck=true span attribute. Probed by kubelet liveness/readiness probes and traffic loop.
+#     Used to verify PCG drop rules for health checks.
+#   - PII Masking Transform: Endpoint /api/secure receives user.email, payment.credit_card, auth.token.
+#     Used to verify PCG regex masking and redaction rules.
+#   - Log Level Filter: Diagnostic debug logs emitted at DEBUG level alongside INFO/WARN/ERROR.
+#     Used to verify PCG log drop rules (e.g. dropping DEBUG logs before ingest).
+#   - Tail / Error Sampling: High-frequency /api/data mixed with /api/slow (>300ms) and /api/error (500).
+#     Used to verify PCG sampling rules (e.g. sample 10% normal, 100% errors/slow).
+#
+# PROTOCOL ARCHITECTURE:
+# 1. Native New Relic APM Protocol (4 services: Python, Node.js, Java, .NET):
 #    Directs native agent traffic to Pipeline Control Gateway's HTTP port 80:
-#    NEW_RELIC_HOST: pipeline-control-gateway.newrelic.svc.cluster.local
-# 2. Hybrid Protocol Mode:
-#    Directs APM agent OTLP export to Pipeline Control Gateway's OTLP port 4318:
+#    NEW_RELIC_HOST: pipeline-control-gateway.newrelic.svc.cluster.local:80
+#
+# 2. Hybrid Protocol Mode (4 services: Python, Node.js, Java, .NET):
+#    Directs APM agent OTLP export to Pipeline Control Gateway's OTLP HTTP port 4318:
 #    OTEL_EXPORTER_OTLP_ENDPOINT: http://pipeline-control-gateway.newrelic.svc.cluster.local:4318
+#    Agent lifecycle & entity registration connect directly to New Relic SaaS via TLS.
 #
 # NAMESPACE:
 # Deployed into 'opentelemetry-demo' namespace to access shared newrelic-license-key secret.
 # --------------------------------------------------------------------------------------------------
 
 # ==============================================================================
-# 1. Python APM Workload (Native Protocol Mode)
+# In-Cluster APM Test Configuration
+# Dynamically managed by install-k8s.sh / nr-otel-cli based on destination choice:
+#   - PCG:              host=collector.newrelic.com:443 (SaaS), otlp=pipeline-control-gateway:4318
+#   - OTel Collector:   otlp=otel-collector:4317
+#   - Direct SaaS:      host=collector.newrelic.com:443, otlp=https://otlp.nr-data.net:4318
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apm-test-config
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-test-config
+    app.kubernetes.io/part-of: apm-test-apps
+data:
+  NATIVE_NEW_RELIC_HOST: "collector.newrelic.com"
+  NATIVE_NEW_RELIC_PORT: "443"
+  NATIVE_NEW_RELIC_SSL: "true"
+  HYBRID_NEW_RELIC_HOST: "collector.newrelic.com"
+  HYBRID_NEW_RELIC_PORT: "443"
+  HYBRID_NEW_RELIC_SSL: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "https://otlp.nr-data.net:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+---
+# ==============================================================================
+# 1. Python APM Workload - NATIVE Protocol Mode (Flask + HTTP Generator + Logs)
 # ==============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: apm-python-test
+  name: apm-python-native
   namespace: opentelemetry-demo
   labels:
-    app.kubernetes.io/name: apm-python-test
-    app.kubernetes.io/component: test-apm
+    app.kubernetes.io/name: apm-python-native
+    app.kubernetes.io/component: native-apm
+    app.kubernetes.io/part-of: apm-test-apps
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: apm-python-test
+      app.kubernetes.io/name: apm-python-native
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: apm-python-test
+        app.kubernetes.io/name: apm-python-native
+        app.kubernetes.io/component: native-apm
+        app.kubernetes.io/part-of: apm-test-apps
     spec:
       containers:
         - name: apm-python
@@ -42,35 +89,126 @@ spec:
             - /bin/sh
             - -c
             - |
-              pip install --no-cache-dir newrelic urllib3
+              pip install --no-cache-dir newrelic flask requests urllib3
               cat <<'EOF' > /app.py
-              import os, time, urllib.request, newrelic.agent
+              import os, time, random, threading, logging, requests
+              from flask import Flask, jsonify
+              import newrelic.agent
+
               newrelic.agent.initialize()
-              @newrelic.agent.background_task(name='simulate_transaction', group='Task')
-              def do_work():
-                  time.sleep(0.1)
-                  print("Python APM: Generated simulated transaction")
-              while True:
-                  do_work()
-                  time.sleep(5)
+              logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+              logger = logging.getLogger("apm-python-native")
+
+              app = Flask(__name__)
+              app.wsgi_app = newrelic.agent.WSGIApplicationWrapper(app.wsgi_app)
+
+              @app.route("/healthz")
+              def healthz():
+                  app_inst = newrelic.agent.application()
+                  if app_inst:
+                      newrelic.agent.record_custom_metric("Custom/App/HealthStatus", 1.0, application=app_inst)
+                  else:
+                      newrelic.agent.record_custom_metric("Custom/App/HealthStatus", 1.0)
+                  newrelic.agent.add_custom_attribute("healthcheck", "true")
+                  newrelic.agent.add_custom_attribute("test.rule", "drop-filter")
+                  logger.debug("Python Native: Health check debug ping processed")
+                  return jsonify({"status": "healthy", "service": "apm-python-native", "metric": "Custom/App/HealthStatus"})
+
+              @app.route("/api/secure")
+              def get_secure():
+                  newrelic.agent.add_custom_attribute("user.email", "alice@example.com")
+                  newrelic.agent.add_custom_attribute("payment.credit_card", "4111-2222-3333-4444")
+                  newrelic.agent.add_custom_attribute("auth.token", "secret_token_abc123")
+                  logger.info("Python Native: Processing secure transaction for alice@example.com, card: 4111-2222-3333-4444")
+                  return jsonify({"status": "secure_processed", "account": "alice@example.com"})
+
+              @app.route("/api/data")
+              def get_data():
+                  logger.debug("Python Native: Diagnostic trace for /api/data")
+                  logger.info("Python Native: Handled /api/data request successfully")
+                  time.sleep(0.05)
+                  return jsonify({"status": "success", "language": "python", "protocol": "native"})
+
+              @app.route("/api/slow")
+              def get_slow():
+                  delay = random.uniform(0.3, 0.6)
+                  logger.warning(f"Python Native: Processing slow transaction ({delay:.2f}s)")
+                  time.sleep(delay)
+                  return jsonify({"status": "slow", "delay": delay})
+
+              @app.route("/api/error")
+              def get_error():
+                  logger.error("Python Native: Simulated server error on /api/error endpoint")
+                  return jsonify({"error": "Simulated error"}), 500
+
+              def traffic_generator():
+                  time.sleep(8)
+                  session = requests.Session()
+                  paths = ["/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error"]
+                  while True:
+                      try:
+                          path = random.choice(paths)
+                          session.get(f"http://127.0.0.1:5000{path}", timeout=5)
+                      except Exception as e:
+                          logger.error(f"Traffic generator error: {e}")
+                      time.sleep(random.uniform(2.0, 4.0))
+
+              threading.Thread(target=traffic_generator, daemon=True).start()
+
+              if __name__ == "__main__":
+                  app.run(host="0.0.0.0", port=5000)
               EOF
               python /app.py
           env:
             - name: NEW_RELIC_APP_NAME
-              value: "apm-python-test"
+              value: "apm-python-native"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
                   name: newrelic-license-key
                   key: license-key
             - name: NEW_RELIC_HOST
-              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_HOST
             - name: NEW_RELIC_PORT
-              value: "80"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_SSL
             - name: NEW_RELIC_LOG
               value: "stdout"
             - name: NEW_RELIC_LOG_LEVEL
-              value: "info"
+              value: "debug"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 5
           resources:
             requests:
               cpu: 50m
@@ -81,25 +219,200 @@ spec:
 
 ---
 # ==============================================================================
-# 2. Node.js APM Workload (Hybrid OTLP Mode)
+# 2. Python APM Workload - HYBRID Mode (Flask + OTLP gRPC port 4317 + Logs)
 # ==============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: apm-node-hybrid-test
+  name: apm-python-hybrid
   namespace: opentelemetry-demo
   labels:
-    app.kubernetes.io/name: apm-node-hybrid-test
-    app.kubernetes.io/component: test-apm
+    app.kubernetes.io/name: apm-python-hybrid
+    app.kubernetes.io/component: hybrid-apm
+    app.kubernetes.io/part-of: apm-test-apps
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: apm-node-hybrid-test
+      app.kubernetes.io/name: apm-python-hybrid
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: apm-node-hybrid-test
+        app.kubernetes.io/name: apm-python-hybrid
+        app.kubernetes.io/component: hybrid-apm
+        app.kubernetes.io/part-of: apm-test-apps
+    spec:
+      containers:
+        - name: apm-python
+          image: python:3.11-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install --no-cache-dir newrelic flask requests urllib3
+              cat <<'EOF' > /app.py
+              import os, time, random, threading, logging, requests
+              from flask import Flask, jsonify
+              import newrelic.agent
+
+              newrelic.agent.initialize()
+              logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+              logger = logging.getLogger("apm-python-hybrid")
+
+              app = Flask(__name__)
+              app.wsgi_app = newrelic.agent.WSGIApplicationWrapper(app.wsgi_app)
+
+              @app.route("/healthz")
+              def healthz():
+                  app_inst = newrelic.agent.application()
+                  if app_inst:
+                      newrelic.agent.record_custom_metric("Custom/App/HealthStatus", 1.0, application=app_inst)
+                  else:
+                      newrelic.agent.record_custom_metric("Custom/App/HealthStatus", 1.0)
+                  newrelic.agent.add_custom_attribute("healthcheck", "true")
+                  newrelic.agent.add_custom_attribute("test.rule", "drop-filter")
+                  logger.debug("Python Hybrid: Health check debug ping processed")
+                  return jsonify({"status": "healthy", "service": "apm-python-hybrid", "metric": "Custom/App/HealthStatus"})
+
+              @app.route("/api/secure")
+              def get_secure():
+                  newrelic.agent.add_custom_attribute("user.email", "alice@example.com")
+                  newrelic.agent.add_custom_attribute("payment.credit_card", "4111-2222-3333-4444")
+                  newrelic.agent.add_custom_attribute("auth.token", "secret_token_abc123")
+                  logger.info("Python Hybrid: Processing secure transaction for alice@example.com, card: 4111-2222-3333-4444")
+                  return jsonify({"status": "secure_processed", "account": "alice@example.com"})
+
+              @app.route("/api/data")
+              def get_data():
+                  logger.debug("Python Hybrid: Diagnostic trace for /api/data")
+                  logger.info("Python Hybrid: Handled /api/data request successfully via OTLP")
+                  time.sleep(0.05)
+                  return jsonify({"status": "success", "language": "python", "protocol": "hybrid"})
+
+              @app.route("/api/slow")
+              def get_slow():
+                  delay = random.uniform(0.3, 0.6)
+                  logger.warning(f"Python Hybrid: Processing slow transaction ({delay:.2f}s)")
+                  time.sleep(delay)
+                  return jsonify({"status": "slow", "delay": delay})
+
+              @app.route("/api/error")
+              def get_error():
+                  logger.error("Python Hybrid: Simulated server error on /api/error endpoint")
+                  return jsonify({"error": "Simulated error"}), 500
+
+              def traffic_generator():
+                  time.sleep(8)
+                  session = requests.Session()
+                  paths = ["/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error"]
+                  while True:
+                      try:
+                          path = random.choice(paths)
+                          session.get(f"http://127.0.0.1:5000{path}", timeout=5)
+                      except Exception as e:
+                          logger.error(f"Traffic generator error: {e}")
+                      time.sleep(random.uniform(2.0, 4.0))
+
+              threading.Thread(target=traffic_generator, daemon=True).start()
+
+              if __name__ == "__main__":
+                  app.run(host="0.0.0.0", port=5000)
+              EOF
+              python /app.py
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-python-hybrid"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_HOST
+            - name: NEW_RELIC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_SSL
+            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_PROTOCOL
+            - name: NEW_RELIC_LOG
+              value: "stdout"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "debug"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+---
+# ==============================================================================
+# 3. Node.js APM Workload - NATIVE Protocol Mode (Express + HTTP Generator + Logs)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-node-native
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-node-native
+    app.kubernetes.io/component: native-apm
+    app.kubernetes.io/part-of: apm-test-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-node-native
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-node-native
+        app.kubernetes.io/component: native-apm
+        app.kubernetes.io/part-of: apm-test-apps
     spec:
       containers:
         - name: apm-node
@@ -110,163 +423,848 @@ spec:
             - |
               mkdir -p /app && cd /app
               npm init -y
-              npm install --save newrelic
+              npm install --save newrelic express http
               cat <<'EOF' > index.js
               const newrelic = require('newrelic');
-              function processJob() {
-                newrelic.startBackgroundTransaction('node-hybrid-job', () => {
-                  setTimeout(() => {
-                    newrelic.endTransaction();
-                    console.log("Node.js Hybrid APM: Generated background transaction via OTLP");
-                  }, 100);
-                });
-              }
-              setInterval(processJob, 5000);
+              const express = require('express');
+              const http = require('http');
+
+              const app = express();
+              const port = 3000;
+
+              app.get('/healthz', (req, res) => {
+                newrelic.recordMetric('Custom/App/HealthStatus', 1.0);
+                newrelic.addCustomAttribute('healthcheck', 'true');
+                newrelic.addCustomAttribute('test.rule', 'drop-filter');
+                console.debug("Node Native: Health check debug ping processed");
+                res.json({ status: "healthy", service: "apm-node-native", metric: "Custom/App/HealthStatus" });
+              });
+
+              app.get('/api/secure', (req, res) => {
+                newrelic.addCustomAttribute('user.email', 'bob@example.com');
+                newrelic.addCustomAttribute('payment.credit_card', '4222-3333-4444-5555');
+                newrelic.addCustomAttribute('auth.token', 'secret_token_def456');
+                console.log("Node Native: Processing secure transaction for bob@example.com, card: 4222-3333-4444-5555");
+                res.json({ status: "secure_processed", account: "bob@example.com" });
+              });
+
+              app.get('/api/data', (req, res) => {
+                console.debug("Node Native: Diagnostic trace for /api/data");
+                console.log("Node Native: Processing /api/data transaction");
+                res.json({ status: "success", language: "nodejs", protocol: "native" });
+              });
+
+              app.get('/api/slow', (req, res) => {
+                const delay = Math.floor(Math.random() * 300) + 300;
+                console.warn(`Node Native: Processing slow transaction (${delay}ms)`);
+                setTimeout(() => {
+                  res.json({ status: "slow", delay });
+                }, delay);
+              });
+
+              app.get('/api/error', (req, res) => {
+                console.error("Node Native: Simulated error on /api/error endpoint");
+                res.status(500).json({ error: "Simulated error" });
+              });
+
+              app.listen(port, () => {
+                console.log(`Node Native test app listening on port ${port}`);
+                setTimeout(() => {
+                  setInterval(() => {
+                    const paths = ['/api/data', '/api/data', '/healthz', '/api/secure', '/api/slow', '/api/error'];
+                    const selectedPath = paths[Math.floor(Math.random() * paths.length)];
+                    http.get(`http://127.0.0.1:${port}${selectedPath}`, () => {}).on('error', (e) => {
+                      console.error(`Traffic generator error: ${e.message}`);
+                    });
+                  }, 2500);
+                }, 8000);
+              });
               EOF
               node index.js
           env:
             - name: NEW_RELIC_APP_NAME
-              value: "apm-node-hybrid-test"
-            - name: NEW_RELIC_LICENSE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: newrelic-license-key
-                  key: license-key
-            # Hybrid mode: Sends OTLP data directly to PCG OTLP port 4318
-            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
-              value: "true"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://pipeline-control-gateway.newrelic.svc.cluster.local:4318"
-            - name: NEW_RELIC_LOG
-              value: "stdout"
-            - name: NEW_RELIC_LOG_LEVEL
-              value: "info"
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
-
----
-# ==============================================================================
-# 3. Java APM Workload (Native Protocol Mode)
-# ==============================================================================
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: apm-java-test
-  namespace: opentelemetry-demo
-  labels:
-    app.kubernetes.io/name: apm-java-test
-    app.kubernetes.io/component: test-apm
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: apm-java-test
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: apm-java-test
-    spec:
-      containers:
-        - name: apm-java
-          image: eclipse-temurin:17-jre-alpine
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /agent /app
-              wget -q -O /agent/newrelic.jar https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-agent.jar
-              cat <<'EOF' > /app/App.java
-              public class App {
-                public static void main(String[] args) throws Exception {
-                  System.out.println("Java APM test worker started");
-                  while (true) {
-                    Thread.sleep(5000);
-                    System.out.println("Java APM: simulated transaction loop");
-                  }
-                }
-              }
-              EOF
-              javac /app/App.java -d /app
-              java -javaagent:/agent/newrelic.jar -Dnewrelic.config.file=/dev/null -cp /app App
-          env:
-            - name: NEW_RELIC_APP_NAME
-              value: "apm-java-test"
+              value: "apm-node-native"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
                   name: newrelic-license-key
                   key: license-key
             - name: NEW_RELIC_HOST
-              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_HOST
             - name: NEW_RELIC_PORT
-              value: "80"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_SSL
             - name: NEW_RELIC_LOG
-              value: "STDOUT"
+              value: "stdout"
             - name: NEW_RELIC_LOG_LEVEL
-              value: "INFO"
+              value: "debug"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 5
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 300m
-              memory: 512Mi
+              cpu: 500m
+              memory: 256Mi
 
 ---
 # ==============================================================================
-# 4. C# / .NET APM Workload (Native Protocol Mode)
+# 4. Node.js APM Workload - HYBRID Mode (Express + OTLP gRPC port 4317 + Logs)
 # ==============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: apm-dotnet-test
+  name: apm-node-hybrid
   namespace: opentelemetry-demo
   labels:
-    app.kubernetes.io/name: apm-dotnet-test
-    app.kubernetes.io/component: test-apm
+    app.kubernetes.io/name: apm-node-hybrid
+    app.kubernetes.io/component: hybrid-apm
+    app.kubernetes.io/part-of: apm-test-apps
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: apm-dotnet-test
+      app.kubernetes.io/name: apm-node-hybrid
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: apm-dotnet-test
+        app.kubernetes.io/name: apm-node-hybrid
+        app.kubernetes.io/component: hybrid-apm
+        app.kubernetes.io/part-of: apm-test-apps
     spec:
       containers:
-        - name: apm-dotnet
-          image: mcr.microsoft.com/dotnet/sdk:8.0-alpine
+        - name: apm-node
+          image: node:20-alpine
           command:
             - /bin/sh
             - -c
             - |
               mkdir -p /app && cd /app
-              dotnet new console -n Worker
-              cd Worker
-              dotnet add package NewRelic.Agent
-              cat <<'EOF' > Program.cs
-              using System;
-              using System.Threading;
-              class Program {
-                static void Main(string[] args) {
-                  Console.WriteLine("C# .NET APM test worker started");
-                  while (true) {
-                    Thread.Sleep(5000);
-                    Console.WriteLine("C# APM: simulated transaction loop");
-                  }
+              npm init -y
+              npm install --save newrelic express http
+              cat <<'EOF' > index.js
+              const newrelic = require('newrelic');
+              const express = require('express');
+              const http = require('http');
+
+              const app = express();
+              const port = 3000;
+
+              app.get('/healthz', (req, res) => {
+                newrelic.recordMetric('Custom/App/HealthStatus', 1.0);
+                newrelic.addCustomAttribute('healthcheck', 'true');
+                newrelic.addCustomAttribute('test.rule', 'drop-filter');
+                console.debug("Node Hybrid: Health check debug ping processed");
+                res.json({ status: "healthy", service: "apm-node-hybrid", metric: "Custom/App/HealthStatus" });
+              });
+
+              app.get('/api/secure', (req, res) => {
+                newrelic.addCustomAttribute('user.email', 'bob@example.com');
+                newrelic.addCustomAttribute('payment.credit_card', '4222-3333-4444-5555');
+                newrelic.addCustomAttribute('auth.token', 'secret_token_def456');
+                console.log("Node Hybrid: Processing secure transaction for bob@example.com, card: 4222-3333-4444-5555");
+                res.json({ status: "secure_processed", account: "bob@example.com" });
+              });
+
+              app.get('/api/data', (req, res) => {
+                console.debug("Node Hybrid: Diagnostic trace for /api/data");
+                console.log("Node Hybrid: Processing /api/data transaction via OTLP");
+                res.json({ status: "success", language: "nodejs", protocol: "hybrid" });
+              });
+
+              app.get('/api/slow', (req, res) => {
+                const delay = Math.floor(Math.random() * 300) + 300;
+                console.warn(`Node Hybrid: Processing slow transaction (${delay}ms)`);
+                setTimeout(() => {
+                  res.json({ status: "slow", delay });
+                }, delay);
+              });
+
+              app.get('/api/error', (req, res) => {
+                console.error("Node Hybrid: Simulated error on /api/error endpoint");
+                res.status(500).json({ error: "Simulated error" });
+              });
+
+              app.listen(port, () => {
+                console.log(`Node Hybrid test app listening on port ${port}`);
+                setTimeout(() => {
+                  setInterval(() => {
+                    const paths = ['/api/data', '/api/data', '/healthz', '/api/secure', '/api/slow', '/api/error'];
+                    const selectedPath = paths[Math.floor(Math.random() * paths.length)];
+                    http.get(`http://127.0.0.1:${port}${selectedPath}`, () => {}).on('error', (e) => {
+                      console.error(`Traffic generator error: ${e.message}`);
+                    });
+                  }, 2500);
+                }, 8000);
+              });
+              EOF
+              node index.js
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-node-hybrid"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_HOST
+            - name: NEW_RELIC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_SSL
+            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_PROTOCOL
+            - name: NEW_RELIC_LOG
+              value: "stdout"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "debug"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# ==============================================================================
+# 5. Java APM Workload - NATIVE Protocol Mode (HTTP Server + HTTP Generator + Logs)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-java-native
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-java-native
+    app.kubernetes.io/component: native-apm
+    app.kubernetes.io/part-of: apm-test-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-java-native
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-java-native
+        app.kubernetes.io/component: native-apm
+        app.kubernetes.io/part-of: apm-test-apps
+    spec:
+      containers:
+        - name: apm-java
+          image: eclipse-temurin:17-jdk
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /agent /app
+              wget -q -O /agent/newrelic.jar https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-agent.jar
+              wget -q -O /agent/newrelic-api.jar https://download.newrelic.com/newrelic/java-agent/newrelic-api/current/newrelic-api.jar
+              cat <<'EOF' > /app/App.java
+              import com.sun.net.httpserver.HttpServer;
+              import com.sun.net.httpserver.HttpHandler;
+              import com.sun.net.httpserver.HttpExchange;
+              import java.io.IOException;
+              import java.io.OutputStream;
+              import java.net.InetSocketAddress;
+              import java.net.URI;
+              import java.net.http.HttpClient;
+              import java.net.http.HttpRequest;
+              import java.net.http.HttpResponse;
+              import java.util.Random;
+              import java.util.logging.Logger;
+
+              public class App {
+                private static final Logger logger = Logger.getLogger(App.class.getName());
+
+                public static void main(String[] args) throws Exception {
+                  HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+
+                  server.createContext("/healthz", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      try {
+                        com.newrelic.api.agent.NewRelic.recordMetric("Custom/App/HealthStatus", 1.0f);
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("healthcheck", "true");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("test.rule", "drop-filter");
+                      } catch (Throwable ignored) {}
+                      logger.fine("Java Native: Health check debug ping processed");
+                      String response = "{\"status\":\"healthy\",\"service\":\"apm-java-native\",\"metric\":\"Custom/App/HealthStatus\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/secure", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      try {
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("user.email", "charlie@example.com");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("payment.credit_card", "4333-4444-5555-6666");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("auth.token", "secret_token_ghi789");
+                      } catch (Throwable ignored) {}
+                      logger.info("Java Native: Processing secure transaction for charlie@example.com, card: 4333-4444-5555-6666");
+                      String response = "{\"status\":\"secure_processed\",\"account\":\"charlie@example.com\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/data", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.fine("Java Native: Diagnostic trace for /api/data");
+                      logger.info("Java Native: Processing /api/data transaction");
+                      String response = "{\"status\":\"success\",\"language\":\"java\",\"protocol\":\"native\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/slow", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.warning("Java Native: Processing slow transaction");
+                      try { Thread.sleep(400); } catch (Exception e) {}
+                      String response = "{\"status\":\"slow\",\"delay\":400}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/error", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.severe("Java Native: Simulated error on /api/error endpoint");
+                      String response = "{\"error\":\"Simulated error\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(500, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.start();
+                  logger.info("Java Native HTTP server started on port 8080");
+
+                  // Traffic generator loop
+                  new Thread(() -> {
+                    try { Thread.sleep(8000); } catch (Exception ignored) {}
+                    HttpClient client = HttpClient.newHttpClient();
+                    Random rand = new Random();
+                    String[] paths = {"/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error"};
+                    while (true) {
+                      try {
+                        Thread.sleep(2500);
+                        String path = paths[rand.nextInt(paths.length)];
+                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:8080" + path)).build();
+                        client.send(req, HttpResponse.BodyHandlers.discarding());
+                      } catch (Exception e) {
+                        logger.severe("Traffic generator error: " + e.getMessage());
+                      }
+                    }
+                  }).start();
                 }
               }
               EOF
-              dotnet run
+              javac -cp /agent/newrelic-api.jar:/agent/newrelic.jar /app/App.java -d /app
+              java -javaagent:/agent/newrelic.jar \
+                   -Dnewrelic.config.file=/dev/null \
+                   -Dnewrelic.config.application_logging.forwarding.enabled=true \
+                   -Dnewrelic.config.application_logging.metrics.enabled=true \
+                   -Dnewrelic.config.application_logging.local_decorating.enabled=true \
+                   -cp /agent/newrelic-api.jar:/agent/newrelic.jar:/app App
           env:
             - name: NEW_RELIC_APP_NAME
-              value: "apm-dotnet-test"
+              value: "apm-java-native"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_HOST
+            - name: NEW_RELIC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_SSL
+            - name: NEW_RELIC_LOG
+              value: "STDOUT"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "DEBUG"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+
+---
+# ==============================================================================
+# 6. Java APM Workload - HYBRID Mode (HTTP Server + OTLP gRPC port 4317 + Logs)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-java-hybrid
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-java-hybrid
+    app.kubernetes.io/component: hybrid-apm
+    app.kubernetes.io/part-of: apm-test-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-java-hybrid
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-java-hybrid
+        app.kubernetes.io/component: hybrid-apm
+        app.kubernetes.io/part-of: apm-test-apps
+    spec:
+      containers:
+        - name: apm-java
+          image: eclipse-temurin:17-jdk
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /agent /app
+              wget -q -O /agent/newrelic.jar https://download.newrelic.com/newrelic/java-agent/newrelic-agent/current/newrelic-agent.jar
+              wget -q -O /agent/newrelic-api.jar https://download.newrelic.com/newrelic/java-agent/newrelic-api/current/newrelic-api.jar
+              cat <<'EOF' > /app/App.java
+              import com.sun.net.httpserver.HttpServer;
+              import com.sun.net.httpserver.HttpHandler;
+              import com.sun.net.httpserver.HttpExchange;
+              import java.io.IOException;
+              import java.io.OutputStream;
+              import java.net.InetSocketAddress;
+              import java.net.URI;
+              import java.net.http.HttpClient;
+              import java.net.http.HttpRequest;
+              import java.net.http.HttpResponse;
+              import java.util.Random;
+              import java.util.logging.Logger;
+
+              public class App {
+                private static final Logger logger = Logger.getLogger(App.class.getName());
+
+                public static void main(String[] args) throws Exception {
+                  HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+
+                  server.createContext("/healthz", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      try {
+                        com.newrelic.api.agent.NewRelic.recordMetric("Custom/App/HealthStatus", 1.0f);
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("healthcheck", "true");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("test.rule", "drop-filter");
+                      } catch (Throwable ignored) {}
+                      logger.fine("Java Hybrid: Health check debug ping processed");
+                      String response = "{\"status\":\"healthy\",\"service\":\"apm-java-hybrid\",\"metric\":\"Custom/App/HealthStatus\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/secure", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      try {
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("user.email", "charlie@example.com");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("payment.credit_card", "4333-4444-5555-6666");
+                        com.newrelic.api.agent.NewRelic.addCustomParameter("auth.token", "secret_token_ghi789");
+                      } catch (Throwable ignored) {}
+                      logger.info("Java Hybrid: Processing secure transaction for charlie@example.com, card: 4333-4444-5555-6666");
+                      String response = "{\"status\":\"secure_processed\",\"account\":\"charlie@example.com\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/data", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.fine("Java Hybrid: Diagnostic trace for /api/data");
+                      logger.info("Java Hybrid: Processing /api/data transaction via OTLP");
+                      String response = "{\"status\":\"success\",\"language\":\"java\",\"protocol\":\"hybrid\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/slow", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.warning("Java Hybrid: Processing slow transaction");
+                      try { Thread.sleep(400); } catch (Exception e) {}
+                      String response = "{\"status\":\"slow\",\"delay\":400}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(200, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.createContext("/api/error", new HttpHandler() {
+                    public void handle(HttpExchange exchange) throws IOException {
+                      logger.severe("Java Hybrid: Simulated error on /api/error endpoint");
+                      String response = "{\"error\":\"Simulated error\"}";
+                      exchange.getResponseHeaders().set("Content-Type", "application/json");
+                      exchange.sendResponseHeaders(500, response.length());
+                      OutputStream os = exchange.getResponseBody();
+                      os.write(response.getBytes());
+                      os.close();
+                    }
+                  });
+
+                  server.start();
+                  logger.info("Java Hybrid HTTP server started on port 8080");
+
+                  // Traffic generator loop
+                  new Thread(() -> {
+                    try { Thread.sleep(8000); } catch (Exception ignored) {}
+                    HttpClient client = HttpClient.newHttpClient();
+                    Random rand = new Random();
+                    String[] paths = {"/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error"};
+                    while (true) {
+                      try {
+                        Thread.sleep(2500);
+                        String path = paths[rand.nextInt(paths.length)];
+                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:8080" + path)).build();
+                        client.send(req, HttpResponse.BodyHandlers.discarding());
+                      } catch (Exception e) {
+                        logger.severe("Traffic generator error: " + e.getMessage());
+                      }
+                    }
+                  }).start();
+                }
+              }
+              EOF
+              javac -cp /agent/newrelic-api.jar:/agent/newrelic.jar /app/App.java -d /app
+              java -javaagent:/agent/newrelic.jar \
+                   -Dnewrelic.config.file=/dev/null \
+                   -Dnewrelic.config.opentelemetry.enabled=true \
+                   -Dnewrelic.config.opentelemetry.metrics.enabled=true \
+                   -Dnewrelic.config.opentelemetry.traces.enabled=true \
+                   -Dnewrelic.config.application_logging.forwarding.enabled=true \
+                   -Dnewrelic.config.application_logging.metrics.enabled=true \
+                   -Dnewrelic.config.application_logging.local_decorating.enabled=true \
+                   -cp /agent/newrelic-api.jar:/agent/newrelic.jar:/app App
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-java-hybrid"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: NEW_RELIC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_HOST
+            - name: NEW_RELIC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_SSL
+            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_PROTOCOL
+            - name: NEW_RELIC_LOG
+              value: "STDOUT"
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "DEBUG"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+
+---
+# ==============================================================================
+# 7. C# / .NET APM Workload - NATIVE Mode (ASP.NET Core Minimal API + HTTP Generator)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-dotnet-native
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-dotnet-native
+    app.kubernetes.io/component: native-apm
+    app.kubernetes.io/part-of: apm-test-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-dotnet-native
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-dotnet-native
+        app.kubernetes.io/component: native-apm
+        app.kubernetes.io/part-of: apm-test-apps
+    spec:
+      containers:
+        - name: apm-dotnet
+          image: mcr.microsoft.com/dotnet/sdk:8.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /app && cd /app
+              dotnet new web -n Worker
+              cd Worker
+              dotnet add package NewRelic.Agent
+              dotnet add package NewRelic.Agent.Api
+              mkdir -p /agent
+              cp -r /root/.nuget/packages/newrelic.agent/*/contentFiles/any/netstandard2.0/newrelic/* /agent/
+
+              cat <<EOF > /agent/newrelic.config
+              <?xml version="1.0"?>
+              <configuration xmlns="urn:newrelic-config" agentEnabled="true">
+                <service licenseKey="${NEW_RELIC_LICENSE_KEY}" host="${NEW_RELIC_HOST}" port="${NEW_RELIC_PORT}" ssl="${NEW_RELIC_SSL}" />
+                <application><name>apm-dotnet-native</name></application>
+                <log level="info" console="true" />
+              </configuration>
+              EOF
+
+              cat <<'EOF' > Program.cs
+              using System;
+              using System.Net.Http;
+              using System.Threading;
+              using System.Threading.Tasks;
+              using Microsoft.AspNetCore.Builder;
+              using Microsoft.AspNetCore.Http;
+              using Microsoft.Extensions.Logging;
+
+              var builder = WebApplication.CreateBuilder(args);
+              var app = builder.Build();
+
+              app.MapGet("/healthz", (ILogger<Program> logger) => {
+                  try {
+                      NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/App/HealthStatus", 1.0f);
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("healthcheck", "true");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("test.rule", "drop-filter");
+                  } catch { }
+                  logger.LogDebug("C# Native: Health check debug ping processed");
+                  return Results.Ok(new { status = "healthy", service = "apm-dotnet-native", metric = "Custom/App/HealthStatus" });
+              });
+
+              app.MapGet("/api/secure", (ILogger<Program> logger) => {
+                  try {
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("user.email", "david@example.com");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("payment.credit_card", "4444-5555-6666-7777");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("auth.token", "secret_token_jkl012");
+                  } catch { }
+                  logger.LogInformation("C# Native: Processing secure transaction for david@example.com, card: 4444-5555-6666-7777");
+                  return Results.Ok(new { status = "secure_processed", account = "david@example.com" });
+              });
+
+              app.MapGet("/api/data", (ILogger<Program> logger) => {
+                  logger.LogDebug("C# Native: Diagnostic trace for /api/data");
+                  logger.LogInformation("C# Native: Processing /api/data transaction");
+                  return Results.Ok(new { status = "success", language = "csharp", protocol = "native" });
+              });
+
+              app.MapGet("/api/slow", async (ILogger<Program> logger) => {
+                  logger.LogWarning("C# Native: Processing slow transaction (400ms)");
+                  await Task.Delay(400);
+                  return Results.Ok(new { status = "slow", delay = 400 });
+              });
+
+              app.MapGet("/api/error", (ILogger<Program> logger) => {
+                  logger.LogError("C# Native: Simulated error on /api/error endpoint");
+                  return Results.Problem("Simulated error", statusCode: 500);
+              });
+
+              _ = Task.Run(async () => {
+                  await Task.Delay(8000);
+                  using var client = new HttpClient();
+                  var random = new Random();
+                  var paths = new[] { "/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error" };
+                  while (true) {
+                      try {
+                          await Task.Delay(2500);
+                          var path = paths[random.Next(paths.Length)];
+                          await client.GetAsync("http://127.0.0.1:5000" + path);
+                      } catch { }
+                  }
+              });
+
+              app.Run("http://0.0.0.0:5000");
+              EOF
+
+              dotnet publish -c Release -o /out
+
+              ARCH=$(uname -m)
+              if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                export CORECLR_PROFILER_PATH=/agent/linux-arm64/libNewRelicProfiler.so
+              else
+                export CORECLR_PROFILER_PATH=/agent/libNewRelicProfiler.so
+              fi
+              export CORECLR_ENABLE_PROFILING=1
+              export CORECLR_PROFILER="{36032161-FFC0-4B61-B559-F6C5D41BAE5A}"
+              export CORECLR_NEWRELIC_HOME=/agent
+
+              dotnet /out/Worker.dll
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-dotnet-native"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -275,15 +1273,264 @@ spec:
             - name: CORECLR_ENABLE_PROFILING
               value: "1"
             - name: CORECLR_PROFILER
-              value: "{71DA0A04-7777-4EC6-9643-7D28B46E8A41}"
+              value: "{36032161-FFC0-4B61-B559-F6C5D41BAE5A}"
+            - name: CORECLR_NEWRELIC_HOME
+              value: "/agent"
             - name: NEW_RELIC_HOST
-              value: "pipeline-control-gateway.newrelic.svc.cluster.local"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_HOST
             - name: NEW_RELIC_PORT
-              value: "80"
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: NATIVE_NEW_RELIC_SSL
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "info"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 5
           resources:
             requests:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: 300m
+              cpu: 1000m
+              memory: 512Mi
+
+---
+# ==============================================================================
+# 8. C# / .NET APM Workload - HYBRID Mode (ASP.NET Core Minimal API + OTLP gRPC port 4317)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apm-dotnet-hybrid
+  namespace: opentelemetry-demo
+  labels:
+    app.kubernetes.io/name: apm-dotnet-hybrid
+    app.kubernetes.io/component: hybrid-apm
+    app.kubernetes.io/part-of: apm-test-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apm-dotnet-hybrid
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apm-dotnet-hybrid
+        app.kubernetes.io/component: hybrid-apm
+        app.kubernetes.io/part-of: apm-test-apps
+    spec:
+      containers:
+        - name: apm-dotnet
+          image: mcr.microsoft.com/dotnet/sdk:8.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /app && cd /app
+              dotnet new web -n Worker
+              cd Worker
+              dotnet add package NewRelic.Agent
+              dotnet add package NewRelic.Agent.Api
+              mkdir -p /agent
+              cp -r /root/.nuget/packages/newrelic.agent/*/contentFiles/any/netstandard2.0/newrelic/* /agent/
+
+              cat <<EOF > /agent/newrelic.config
+              <?xml version="1.0"?>
+              <configuration xmlns="urn:newrelic-config" agentEnabled="true">
+                <service licenseKey="${NEW_RELIC_LICENSE_KEY}" host="${NEW_RELIC_HOST}" port="${NEW_RELIC_PORT}" ssl="${NEW_RELIC_SSL}" />
+                <application><name>apm-dotnet-hybrid</name></application>
+                <openTelemetry enabled="true">
+                  <metrics enabled="true" />
+                  <traces enabled="true" />
+                </openTelemetry>
+                <log level="info" console="true" />
+              </configuration>
+              EOF
+
+              cat <<'EOF' > Program.cs
+              using System;
+              using System.Net.Http;
+              using System.Threading;
+              using System.Threading.Tasks;
+              using Microsoft.AspNetCore.Builder;
+              using Microsoft.AspNetCore.Http;
+              using Microsoft.Extensions.Logging;
+
+              var builder = WebApplication.CreateBuilder(args);
+              var app = builder.Build();
+
+              app.MapGet("/healthz", (ILogger<Program> logger) => {
+                  try {
+                      NewRelic.Api.Agent.NewRelic.RecordMetric("Custom/App/HealthStatus", 1.0f);
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("healthcheck", "true");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("test.rule", "drop-filter");
+                  } catch { }
+                  logger.LogDebug("C# Hybrid: Health check debug ping processed");
+                  return Results.Ok(new { status = "healthy", service = "apm-dotnet-hybrid", metric = "Custom/App/HealthStatus" });
+              });
+
+              app.MapGet("/api/secure", (ILogger<Program> logger) => {
+                  try {
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("user.email", "david@example.com");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("payment.credit_card", "4444-5555-6666-7777");
+                      NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction.AddCustomAttribute("auth.token", "secret_token_jkl012");
+                  } catch { }
+                  logger.LogInformation("C# Hybrid: Processing secure transaction for david@example.com, card: 4444-5555-6666-7777");
+                  return Results.Ok(new { status = "secure_processed", account = "david@example.com" });
+              });
+
+              app.MapGet("/api/data", (ILogger<Program> logger) => {
+                  logger.LogDebug("C# Hybrid: Diagnostic trace for /api/data");
+                  logger.LogInformation("C# Hybrid: Processing /api/data transaction via OTLP");
+                  return Results.Ok(new { status = "success", language = "csharp", protocol = "hybrid" });
+              });
+
+              app.MapGet("/api/slow", async (ILogger<Program> logger) => {
+                  logger.LogWarning("C# Hybrid: Processing slow transaction (400ms)");
+                  await Task.Delay(400);
+                  return Results.Ok(new { status = "slow", delay = 400 });
+              });
+
+              app.MapGet("/api/error", (ILogger<Program> logger) => {
+                  logger.LogError("C# Hybrid: Simulated error on /api/error endpoint");
+                  return Results.Problem("Simulated error", statusCode: 500);
+              });
+
+              _ = Task.Run(async () => {
+                  await Task.Delay(8000);
+                  using var client = new HttpClient();
+                  var random = new Random();
+                  var paths = new[] { "/api/data", "/api/data", "/healthz", "/api/secure", "/api/slow", "/api/error" };
+                  while (true) {
+                      try {
+                          await Task.Delay(2500);
+                          var path = paths[random.Next(paths.Length)];
+                          await client.GetAsync("http://127.0.0.1:5000" + path);
+                      } catch { }
+                  }
+              });
+
+              app.Run("http://0.0.0.0:5000");
+              EOF
+
+              dotnet publish -c Release -o /out
+
+              ARCH=$(uname -m)
+              if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                export CORECLR_PROFILER_PATH=/agent/linux-arm64/libNewRelicProfiler.so
+              else
+                export CORECLR_PROFILER_PATH=/agent/libNewRelicProfiler.so
+              fi
+              export CORECLR_ENABLE_PROFILING=1
+              export CORECLR_PROFILER="{36032161-FFC0-4B61-B559-F6C5D41BAE5A}"
+              export CORECLR_NEWRELIC_HOME=/agent
+              export NEW_RELIC_OPENTELEMETRY_ENABLED=true
+
+              dotnet /out/Worker.dll
+          env:
+            - name: NEW_RELIC_APP_NAME
+              value: "apm-dotnet-hybrid"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-license-key
+                  key: license-key
+            - name: CORECLR_ENABLE_PROFILING
+              value: "1"
+            - name: CORECLR_PROFILER
+              value: "{36032161-FFC0-4B61-B559-F6C5D41BAE5A}"
+            - name: CORECLR_NEWRELIC_HOME
+              value: "/agent"
+            - name: NEW_RELIC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_HOST
+            - name: NEW_RELIC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_PORT
+            - name: NEW_RELIC_SSL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: HYBRID_NEW_RELIC_SSL
+            - name: NEW_RELIC_OPENTELEMETRY_ENABLED
+              value: "true"
+            - name: NEW_RELIC_OPENTELEMETRY_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_OPENTELEMETRY_TRACES_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              valueFrom:
+                configMapKeyRef:
+                  name: apm-test-config
+                  key: OTEL_EXPORTER_OTLP_PROTOCOL
+            - name: NEW_RELIC_LOG_LEVEL
+              value: "info"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_METRICS_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
               memory: 512Mi

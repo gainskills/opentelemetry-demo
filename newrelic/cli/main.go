@@ -42,7 +42,6 @@ func main() {
 }
 
 func runHandler(action, target string, cfg *Config) {
-	loadConfig(cfg)
 	switch target {
 	case "account", "resources", "browser":
 		handleTerraform(action, cfg)
@@ -209,12 +208,41 @@ func parseArgs() (Config, []string) {
 			case "ENABLE_NRI_BUNDLE", "NRI_BUNDLE":
 				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
 				cfg.EnableNriBundle = &b
-			case "ENABLE_DEMO_OTEL_COLLECTOR", "ENABLE_NRI_BUNDLE_OTEL_COLLECTOR", "DEMO_COLLECTOR":
+			case "ENABLE_DEMO_OTEL_COLLECTOR":
 				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
 				cfg.EnableDemoOtelCollector = &b
-			case "ENABLE_OTEL_GATEWAY", "OTEL_GATEWAY":
+			case "ENABLE_PCG", "PCG":
 				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
-				cfg.EnableOtelGateway = &b
+				cfg.EnablePcg = &b
+			case "NEW_RELIC_GATEWAY_FLEET":
+				cfg.PcgFleetName = val
+			case "NEW_RELIC_CLIENT_ID":
+				cfg.ClientId = val
+			case "NEW_RELIC_CLIENT_SECRET":
+				cfg.ClientSecret = val
+			case "NEW_RELIC_ORGANIZATION_ID":
+				cfg.OrganizationId = val
+			case "ENABLE_APM_TEST_APPS":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableApmTestApps = &b
+			case "ENABLE_OTEL_DEMO_APPS":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableOtelDemoApps = &b
+			case "ENABLE_APM_HYBRID_APPS":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableApmHybridApps = &b
+			case "ENABLE_APM_NATIVE_APPS":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.EnableApmNativeApps = &b
+			case "OTEL_DEMO_DEST":
+				cfg.OtelDemoDest = strings.ToLower(val)
+			case "APM_HYBRID_DEST":
+				cfg.ApmHybridDest = strings.ToLower(val)
+			case "APM_NATIVE_DEST":
+				cfg.ApmNativeDest = strings.ToLower(val)
+			case "ROUTE_DEMO_TO_PCG":
+				b := strings.ToLower(val) == "true" || strings.ToLower(val) == "y" || val == ""
+				cfg.RouteDemoToPcg = &b
 			case "NEW_RELIC_OTLP_ENDPOINT":
 				cfg.OtlpEndpoint = val
 			case "TF_VAR_SUBACCOUNT_NAME":
@@ -272,8 +300,20 @@ GLOBAL FLAGS:
   --NEW_RELIC_ENABLE_BROWSER  - Set to "true" to enable Browser Monitoring (K8s/Docker only)
   --ENABLE_NRDOT              - Set to "false" to disable New Relic OTel Collector (NRDOT) (Default: true)
   --ENABLE_NRI_BUNDLE         - Set to "true" to enable New Relic Infrastructure Bundle (nri-bundle) (Default: false)
-  --ENABLE_DEMO_OTEL_COLLECTOR - Set to "true" to enable the demo's own OTel Collector for app telemetry (Default: true when NRDOT disabled)
-  --ENABLE_OTEL_GATEWAY       - Set to "true" to enable Standalone OTel Collector Gateway for K8s events (Default: true when NRDOT disabled)
+  --ENABLE_DEMO_OTEL_COLLECTOR - Set to "true" to enable pure OTel Collector architecture (Default: true when NRDOT disabled)
+  --ENABLE_PCG                - Set to "true" to deploy Pipeline Control Gateway (PCG) (Default: false)
+  --NEW_RELIC_GATEWAY_FLEET   - Gateway fleet name for PCG (Default: otel-demo-fleet)
+  --NEW_RELIC_CLIENT_ID       - OAuth Client ID for Agent Control remote fleet management (Optional)
+  --NEW_RELIC_CLIENT_SECRET   - OAuth Client Secret for Agent Control remote fleet management (Optional)
+  --NEW_RELIC_ORGANIZATION_ID - New Relic Organization ID for Agent Control (Default: NEW_RELIC_ACCOUNT_ID)
+  --ENABLE_APM_TEST_APPS      - Set to "false" to disable all APM test workloads (Default: true)
+  --ENABLE_OTEL_DEMO_APPS     - Set to "false" to skip deploying OpenTelemetry Demo services (Default: true)
+  --OTEL_DEMO_DEST            - Destination for OTel Demo: "pcg", "nrdot", "otel-collector", "saas"
+  --ENABLE_APM_HYBRID_APPS    - Set to "true" to deploy APM Hybrid test workloads (Default: true)
+  --APM_HYBRID_DEST           - Destination for APM Hybrid: "pcg", "saas"
+  --ENABLE_APM_NATIVE_APPS    - Set to "true" to deploy APM Native test workloads (Default: true)
+  --APM_NATIVE_DEST           - Destination for APM Native: "pcg", "saas"
+  --ROUTE_DEMO_TO_PCG         - Set to "true" to route demo services directly to PCG (Default: false)
   --NEW_RELIC_OTLP_ENDPOINT   - New Relic OTLP endpoint for the demo's collector (Default: derived from region; override for a Pipeline Control gateway)
 
 INSTALL FLAGS:
@@ -320,6 +360,11 @@ func printCurrentState(cfg *Config) {
 		nriBundleStatus = ColorGreen + "Enabled" + ColorReset
 	}
 
+	pcgStatus := ColorDim + "Disabled" + ColorReset
+	if cfg.EnablePcg != nil && *cfg.EnablePcg {
+		pcgStatus = ColorGreen + "Enabled" + ColorReset
+	}
+
 	fmt.Println(ColorCyan + "=======================================================" + ColorReset)
 	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold, ColorReset)
 	fmt.Printf("  %sRegion:%s     %s\n", ColorCyan, ColorReset, cfg.Region)
@@ -329,6 +374,7 @@ func printCurrentState(cfg *Config) {
 	fmt.Printf("  %sBrowser:%s    %s\n", ColorCyan, ColorReset, browserStatus)
 	fmt.Printf("  %sNRDOT:%s      %s\n", ColorCyan, ColorReset, nrdotStatus)
 	fmt.Printf("  %sNRI-Bundle:%s %s\n", ColorCyan, ColorReset, nriBundleStatus)
+	fmt.Printf("  %sPCG:%s        %s\n", ColorCyan, ColorReset, pcgStatus)
 	if cfg.EnableNrdot != nil && !*cfg.EnableNrdot {
 		collectorStatus := ColorDim + "Disabled" + ColorReset
 		if cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector {
@@ -336,12 +382,32 @@ func printCurrentState(cfg *Config) {
 		}
 		fmt.Printf("  %sDemo OTel:%s  %s\n", ColorCyan, ColorReset, collectorStatus)
 	}
-	if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) || (cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway) {
-		gatewayStatus := ColorDim + "Disabled" + ColorReset
-		if cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway {
-			gatewayStatus = ColorGreen + "Enabled" + ColorReset
+	if cfg.EnableOtelDemoApps != nil {
+		otelAppsStatus := ColorGreen + "Enabled" + ColorReset
+		if !*cfg.EnableOtelDemoApps {
+			otelAppsStatus = ColorDim + "Disabled" + ColorReset
+		} else if cfg.OtelDemoDest != "" {
+			otelAppsStatus += fmt.Sprintf(" (%s)", cfg.OtelDemoDest)
 		}
-		fmt.Printf("  %sOTel Gateway:%s %s\n", ColorCyan, ColorReset, gatewayStatus)
+		fmt.Printf("  %sOTel Apps:%s  %s\n", ColorCyan, ColorReset, otelAppsStatus)
+	}
+	if cfg.EnableApmHybridApps != nil {
+		hybridStatus := ColorGreen + "Enabled" + ColorReset
+		if !*cfg.EnableApmHybridApps {
+			hybridStatus = ColorDim + "Disabled" + ColorReset
+		} else if cfg.ApmHybridDest != "" {
+			hybridStatus += fmt.Sprintf(" (%s)", cfg.ApmHybridDest)
+		}
+		fmt.Printf("  %sAPM Hybrid:%s %s\n", ColorCyan, ColorReset, hybridStatus)
+	}
+	if cfg.EnableApmNativeApps != nil {
+		nativeStatus := ColorGreen + "Enabled" + ColorReset
+		if !*cfg.EnableApmNativeApps {
+			nativeStatus = ColorDim + "Disabled" + ColorReset
+		} else if cfg.ApmNativeDest != "" {
+			nativeStatus += fmt.Sprintf(" (%s)", cfg.ApmNativeDest)
+		}
+		fmt.Printf("  %sAPM Native:%s %s\n", ColorCyan, ColorReset, nativeStatus)
 	}
 	fmt.Println(ColorCyan + "=======================================================" + ColorReset)
 }

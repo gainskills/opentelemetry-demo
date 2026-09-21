@@ -219,8 +219,8 @@ echo "✓ Rendered nri-bundle manifest is current"
 echo ""
 echo "Checking NRI collector overlay against the base values..."
 
-OTEL_DEMO_VALUES_PATH="${OTEL_DEMO_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo.yaml}"
-OTEL_DEMO_NRI_VALUES_PATH="${OTEL_DEMO_NRI_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo-nri-collector.yaml}"
+OTEL_DEMO_VALUES_PATH="${OTEL_DEMO_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo-base.yaml}"
+OTEL_DEMO_NRI_VALUES_PATH="${OTEL_DEMO_NRI_VALUES_PATH:-newrelic/k8s/helm/opentelemetry-demo-pure.yaml}"
 
 helm template otel-demo open-telemetry/opentelemetry-demo \
     --version "$OTEL_DEMO_CHART_VERSION" -n opentelemetry-demo \
@@ -230,7 +230,7 @@ helm template otel-demo open-telemetry/opentelemetry-demo \
     -f "$OTEL_DEMO_VALUES_PATH" -f "$OTEL_DEMO_NRI_VALUES_PATH" > "$OVERLAY_RENDER"
 
 service_env_names() {
-    yq -r 'select(.kind == "Deployment") | .metadata.name as $n | .spec.template.spec.containers[].env[]?.name | "\($n) \(.)"' "$1" | grep -v '^[[:space:]]*$' | sort
+    yq -r 'select(.kind == "Deployment" and .metadata.name != "otel-collector") | .metadata.name as $n | .spec.template.spec.containers[].env[]?.name | "\($n) \(.)"' "$1" | grep -v '^[[:space:]]*$' | sort
 }
 
 ENV_DIFF=$(diff <(service_env_names "$BASE_RENDER") <(service_env_names "$OVERLAY_RENDER") || true)
@@ -249,16 +249,36 @@ if ! grep -qx "$OVERLAY_COLLECTOR_NAME" <<< "$OVERLAY_SERVICES"; then
     exit 1
 fi
 
-OVERLAY_COLLECTOR_CONFIG=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "otel-collector-agent") | .data | to_entries | .[0].value' "$OVERLAY_RENDER")
+OVERLAY_COLLECTOR_CONFIG=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name == "otel-collector" or .metadata.name == "otel-collector-agent")) | .data | to_entries | .[0].value' "$OVERLAY_RENDER")
 for pipeline in traces metrics logs; do
     EXPORTERS=$(yq -r ".service.pipelines.$pipeline.exporters[]" <<< "$OVERLAY_COLLECTOR_CONFIG")
-    if ! grep -Eq "^(otlphttp/newrelic|otlp/gateway)$" <<< "$EXPORTERS"; then
+    if ! grep -Eq "^(otlp_http/newrelic|otlphttp/newrelic|otlp/gateway)$" <<< "$EXPORTERS"; then
         echo "ERROR: overlay $pipeline pipeline does not export to otlphttp/newrelic or otlp/gateway"
         exit 1
     fi
 done
 
 echo "✓ NRI collector overlay preserves base environment and pipelines"
+
+echo ""
+echo "Checking PCG and Agent Control chart rendering..."
+
+helm template "$PCG_RELEASE_NAME" newrelic/pipeline-control-gateway \
+    --version "$PCG_CHART_VERSION" \
+    -n "$PCG_NAMESPACE" \
+    -f "$PCG_VALUES_PATH" \
+    --set "global.region=${NEW_RELIC_REGION:-us}" > /dev/null
+echo "✓ Pipeline Control Gateway (PCG) template valid"
+
+helm template "$AGENT_CONTROL_RELEASE_NAME" newrelic/agent-control-deployment \
+    --version "$AGENT_CONTROL_CHART_VERSION" \
+    -n "$PCG_NAMESPACE" \
+    -f "$AGENT_CONTROL_VALUES_PATH" \
+    --set "global.region=${NEW_RELIC_REGION:-us}" \
+    --set "systemIdentity.organizationId=12345" \
+    --set "systemIdentity.parentIdentity.clientId=dummy-client-id" \
+    --set "systemIdentity.parentIdentity.clientSecret=dummy-client-secret" > /dev/null
+echo "✓ Agent Control Deployment template valid"
 
 echo ""
 echo "✓ All validations passed"

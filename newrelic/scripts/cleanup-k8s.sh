@@ -62,10 +62,6 @@ if [ -f "$APM_TEST_APPS_PATH" ]; then
     echo "Deleting New Relic APM test workloads..."
     kubectl delete -f "$APM_TEST_APPS_PATH" --ignore-not-found
 fi
-if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
-    echo "Deleting Standalone OTel Collector Gateway..."
-    kubectl delete -f "$OTEL_GATEWAY_MANIFEST_PATH" --ignore-not-found
-fi
 cleanup_namespace "$OTEL_DEMO_NAMESPACE"
 if [ "$NRI_BUNDLE_NAMESPACE" != "$OTEL_DEMO_NAMESPACE" ]; then
     cleanup_namespace "$NRI_BUNDLE_NAMESPACE"
