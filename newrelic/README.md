@@ -146,11 +146,11 @@ NOTES:
   Feature Flags UI     http://localhost:8080/feature/
 ```
 
-> **_NOTE:_** It can take anywhere from 2 - 5 minutes for Pods to start up and telemetry to flow through the OTel Collector and on to New Relic.  Please have patience.  If you want to check on the status of the OTel collector, you can run `kubectl logs deployment/otel-collector -n opentelemetry-demo`
+> **_NOTE:_** It can take anywhere from 2 - 5 minutes for Pods to start up and telemetry to flow through the OTel Collector and on to New Relic.  Please have patience.  If you want to check on the status of the OTel collector, you can run `kubectl logs -l app.kubernetes.io/name=nr-k8s-otel-collector -n opentelemetry-demo` (or `kubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-demo` if using the Pure OTel Collector).
 
 ### Customize Kubernetes installation
 
-You can apply changes to the deployed OpenTelemetry Demo by modifying any values in `newrelic/k8s/helm/opentelemetry-demo.yaml`. See supported values in the official OpenTelemetry Demo Helm Chart [here](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-demo#chart-parameters).
+You can apply changes to the deployed OpenTelemetry Demo by modifying any values in `newrelic/k8s/helm/opentelemetry-demo-base.yaml`. See supported values in the official OpenTelemetry Demo Helm Chart [here](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-demo#chart-parameters).
 
 After you save changes, you can re-run `install-k8s.sh` to apply changes and redeploy the modified components.
 

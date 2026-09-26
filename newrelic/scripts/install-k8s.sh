@@ -31,6 +31,7 @@ prompt_for_license_key
 prompt_for_region
 prompt_for_openshift
 prompt_for_k8s_monitoring_components
+prompt_for_application_suites
 resolve_otlp_endpoint
 
 install_or_upgrade_chart() {
@@ -124,6 +125,57 @@ apply_license_secret() {
   kubectl create secret generic "$NR_LICENSE_SECRET" --from-literal=license-key="$NEW_RELIC_LICENSE_KEY" -n "$namespace" --dry-run=client -o yaml | kubectl apply -f -
 }
 
+# Apply dynamically configured ConfigMap for APM test workloads
+apply_apm_test_config() {
+  local namespace=$1
+  local default_nr_host="collector.newrelic.com"
+  local default_nr_port="443"
+  local default_nr_ssl="true"
+
+  # Regional APM SaaS endpoints
+  case "${NEW_RELIC_REGION:-US}" in
+    EU|eu)
+      default_nr_host="collector.eu01.nr-data.net"
+      ;;
+    JP|jp)
+      default_nr_host="collector.jp01.nr-data.net"
+      ;;
+  esac
+
+  local native_nr_host="$default_nr_host"
+  local native_nr_port="$default_nr_port"
+  local native_nr_ssl="$default_nr_ssl"
+
+  if [ "${APM_NATIVE_DEST:-saas}" = "pcg" ]; then
+    native_nr_host="pipeline-control-gateway.newrelic.svc.cluster.local"
+    native_nr_port="80"
+    native_nr_ssl="false"
+  fi
+
+  local hybrid_nr_host="$default_nr_host"
+  local hybrid_nr_port="$default_nr_port"
+  local hybrid_nr_ssl="$default_nr_ssl"
+
+  if [ "${APM_HYBRID_DEST:-saas}" = "pcg" ]; then
+    hybrid_nr_host="pipeline-control-gateway.newrelic.svc.cluster.local"
+    hybrid_nr_port="80"
+    hybrid_nr_ssl="false"
+  fi
+
+  echo "Applying APM test configuration ConfigMap..."
+  echo "  Native APM: host=$native_nr_host:$native_nr_port (ssl=$native_nr_ssl)"
+  echo "  Hybrid APM: host=$hybrid_nr_host:$hybrid_nr_port (ssl=$hybrid_nr_ssl)"
+  kubectl create configmap apm-test-config \
+    -n "$namespace" \
+    --from-literal=NATIVE_NEW_RELIC_HOST="$native_nr_host" \
+    --from-literal=NATIVE_NEW_RELIC_PORT="$native_nr_port" \
+    --from-literal=NATIVE_NEW_RELIC_SSL="$native_nr_ssl" \
+    --from-literal=HYBRID_NEW_RELIC_HOST="$hybrid_nr_host" \
+    --from-literal=HYBRID_NEW_RELIC_PORT="$hybrid_nr_port" \
+    --from-literal=HYBRID_NEW_RELIC_SSL="$hybrid_nr_ssl" \
+    --dry-run=client -o yaml | kubectl apply -f -
+}
+
 ensure_namespace "$OTEL_DEMO_NAMESPACE"
 apply_license_secret "$OTEL_DEMO_NAMESPACE"
 
@@ -143,24 +195,148 @@ if [ "$ENABLE_NRI_BUNDLE" = "y" ]; then
   install_or_upgrade_chart "$NRI_BUNDLE_RELEASE_NAME" "newrelic/nri-bundle" "$NRI_BUNDLE_CHART_VERSION" "$NRI_BUNDLE_VALUES_PATH" "$NRI_BUNDLE_NAMESPACE" "false" "global.region=$NEW_RELIC_REGION"
 fi
 
-echo "Installing OpenTelemetry Demo..."
-if [ "$ENABLE_NRDOT" != "y" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "y" ]; then
-  install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
+if [ "$ENABLE_PCG" = "y" ]; then
+  echo "Installing Pipeline Control Gateway (PCG) & Agent Control..."
+  ensure_namespace "$PCG_NAMESPACE"
+  apply_license_secret "$PCG_NAMESPACE"
+
+  fleet_id="${NEW_RELIC_GATEWAY_FLEET:-otel-demo-fleet}"
+  org_id="${NEW_RELIC_ORGANIZATION_ID:-${NEW_RELIC_ACCOUNT_ID:-}}"
+
+  if [ -n "${NEW_RELIC_CLIENT_ID:-}" ] && [ -n "${NEW_RELIC_CLIENT_SECRET:-}" ] && [ -n "$org_id" ]; then
+    echo "Installing Agent Control Deployment (with System Identity credentials)..."
+    install_or_upgrade_chart "$AGENT_CONTROL_RELEASE_NAME" "newrelic/agent-control-deployment" "$AGENT_CONTROL_CHART_VERSION" "$AGENT_CONTROL_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" \
+      "global.region=$NEW_RELIC_REGION" \
+      "systemIdentity.organizationId=$org_id" \
+      "systemIdentity.parentIdentity.clientId=$NEW_RELIC_CLIENT_ID" \
+      "systemIdentity.parentIdentity.clientSecret=$NEW_RELIC_CLIENT_SECRET" \
+      "config.fleet_control.fleet_id=$fleet_id" \
+      "config.cdEnabled=false" \
+      "subAgentsNamespace=$PCG_NAMESPACE"
+
+    pcg_regional_sets=()
+    case "${NEW_RELIC_REGION:-US}" in
+      EU|eu)
+        pcg_regional_sets+=(
+          "generated.receivers.nrproprietaryreceiver.nr_host=collector.eu01.nr-data.net"
+          "generated.exporters.otlp/exporter.endpoint=https://otlp.eu01.nr-data.net:443"
+          "generated.exporters.otlphttp.endpoint=https://otlp.eu01.nr-data.net"
+        )
+        ;;
+      JP|jp)
+        pcg_regional_sets+=(
+          "generated.receivers.nrproprietaryreceiver.nr_host=collector.jp01.nr-data.net"
+        )
+        ;;
+    esac
+
+    echo "Waiting up to 60s for Agent Control to create pipeline-control-gateway-custom-config ConfigMap..."
+    waited=0
+    found=false
+    while [ "$waited" -lt 60 ]; do
+      if kubectl get configmap pipeline-control-gateway-custom-config -n "$PCG_NAMESPACE" &>/dev/null; then
+        echo "Found pipeline-control-gateway-custom-config ConfigMap in namespace $PCG_NAMESPACE."
+        found=true
+        break
+      fi
+      sleep 3
+      waited=$((waited + 3))
+    done
+
+    if [ "$found" = "true" ]; then
+      echo "Deploying PCG with custom ConfigMap from Agent Control (Fleet: $fleet_id)..."
+      install_or_upgrade_chart "$PCG_RELEASE_NAME" "newrelic/pipeline-control-gateway" "$PCG_CHART_VERSION" "$PCG_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" \
+        "global.region=$NEW_RELIC_REGION" \
+        "fleet_id=$fleet_id" \
+        "deployment.customConfigMap=pipeline-control-gateway-custom-config" \
+        ${pcg_regional_sets[@]+"${pcg_regional_sets[@]}"}
+    else
+      echo "Warning: pipeline-control-gateway-custom-config was not created within 60s."
+      echo "Deploying PCG with in-cluster configuration rules as fallback..."
+      install_or_upgrade_chart "$PCG_RELEASE_NAME" "newrelic/pipeline-control-gateway" "$PCG_CHART_VERSION" "$PCG_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" \
+        "global.region=$NEW_RELIC_REGION" \
+        "fleet_id=$fleet_id" \
+        ${pcg_regional_sets[@]+"${pcg_regional_sets[@]}"}
+    fi
+  else
+    pcg_regional_sets=()
+    case "${NEW_RELIC_REGION:-US}" in
+      EU|eu)
+        pcg_regional_sets+=(
+          "generated.receivers.nrproprietaryreceiver.nr_host=collector.eu01.nr-data.net"
+          "generated.exporters.otlp/exporter.endpoint=https://otlp.eu01.nr-data.net:443"
+          "generated.exporters.otlphttp.endpoint=https://otlp.eu01.nr-data.net"
+        )
+        ;;
+      JP|jp)
+        pcg_regional_sets+=(
+          "generated.receivers.nrproprietaryreceiver.nr_host=collector.jp01.nr-data.net"
+        )
+        ;;
+    esac
+    echo "Note: NEW_RELIC_CLIENT_ID / NEW_RELIC_CLIENT_SECRET not provided. Skipping Agent Control fleet daemon (PCG will run with in-cluster ConfigMap rules)."
+    install_or_upgrade_chart "$PCG_RELEASE_NAME" "newrelic/pipeline-control-gateway" "$PCG_CHART_VERSION" "$PCG_VALUES_PATH" "$PCG_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" \
+      "global.region=$NEW_RELIC_REGION" \
+      "fleet_id=$fleet_id" \
+      ${pcg_regional_sets[@]+"${pcg_regional_sets[@]}"}
+  fi
+fi
+
+if [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
+  echo "Installing OpenTelemetry Demo microservices (destination: ${OTEL_DEMO_DEST:-default})..."
+  case "${OTEL_DEMO_DEST:-default}" in
+    pcg)
+      install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_PCG_VALUES_PATH"
+      ;;
+    nrdot)
+      install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"
+      ;;
+    otel-collector|saas)
+      install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
+      ;;
+    *)
+      if [ "${ROUTE_DEMO_TO_PCG:-n}" = "y" ]; then
+        install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_PCG_VALUES_PATH"
+      elif [ "${ENABLE_NRDOT:-y}" != "y" ] && [ "${ENABLE_DEMO_OTEL_COLLECTOR:-n}" = "y" ]; then
+        install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
+      else
+        install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"
+      fi
+      ;;
+  esac
 else
-  install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"
+  echo "Skipping OpenTelemetry Demo microservices installation (ENABLE_OTEL_DEMO_APPS=n)."
 fi
 
 # Set up postgres db grants
-if [ "$ENABLE_NRDOT" = "y" ]; then
+if [ "$ENABLE_NRDOT" = "y" ] && [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
   setup_pg_monitoring
 fi
 
-if [ "${ENABLE_OTEL_GATEWAY:-n}" = "y" ]; then
-  echo "Installing Standalone OpenTelemetry Collector Gateway..."
-  kubectl apply -f "$OTEL_GATEWAY_MANIFEST_PATH"
+# Deploy dedicated New Relic APM test workloads
+if [ "${ENABLE_APM_TEST_APPS:-n}" = "y" ]; then
+  apply_apm_test_config "$OTEL_DEMO_NAMESPACE"
+
+  if [ "${ENABLE_APM_NATIVE_APPS:-n}" = "y" ]; then
+    echo "Deploying New Relic APM Native test workloads (destination: $APM_NATIVE_DEST)..."
+    kubectl apply -f "$APM_TEST_APPS_PATH" -l app.kubernetes.io/component=native-apm
+  fi
+
+  if [ "${ENABLE_APM_HYBRID_APPS:-n}" = "y" ]; then
+    echo "Deploying New Relic APM Hybrid test workloads (destination: $APM_HYBRID_DEST)..."
+    kubectl apply -f "$APM_TEST_APPS_PATH" -l app.kubernetes.io/component=hybrid-apm
+  fi
 fi
 
-echo "OpenTelemetry Demo installation completed successfully!"
-if [ "${ENABLE_OTEL_GATEWAY:-n}" = "y" ]; then
-  echo "  To stream Gateway events: kubectl logs -f -n $OTEL_DEMO_NAMESPACE deployment/otel-gateway"
+echo "Installation completed successfully!"
+if [ "$ENABLE_NRDOT" != "y" ] && [ "$ENABLE_DEMO_OTEL_COLLECTOR" = "y" ] && [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
+  echo "  To stream Collector logs: kubectl logs -f -n $OTEL_DEMO_NAMESPACE -l app.kubernetes.io/component=standalone-collector"
+fi
+if [ "${ENABLE_PCG:-n}" = "y" ]; then
+  echo "  Pipeline Control Gateway is running in namespace: $PCG_NAMESPACE"
+  echo "  To inspect PCG logs: kubectl logs -f -n $PCG_NAMESPACE deployment/pipeline-control-gateway"
+fi
+if [ "${ENABLE_APM_TEST_APPS:-n}" = "y" ]; then
+  echo "  APM test workloads deployed in namespace: $OTEL_DEMO_NAMESPACE"
+  echo "  To check APM apps: kubectl get pods -n $OTEL_DEMO_NAMESPACE -l app.kubernetes.io/part-of=apm-test-apps"
 fi

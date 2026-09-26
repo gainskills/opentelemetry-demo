@@ -147,7 +147,7 @@ if [ "$CONTRIB_VERSION" != "$CURR_CONTRIB_VERSION" ]; then
   # and formatting.
   sed_i '/repository: otel\/opentelemetry-collector-contrib/{n;s/tag: .*/tag: "'"$CONTRIB_VERSION"'"/;}' "$NR_K8S_VALUES_PATH"
   sed_i "s#\(COLLECTOR_CONTRIB_IMAGE=.*opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION#" "$ENV_PATH"
-  if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
+  if [ -n "${OTEL_GATEWAY_MANIFEST_PATH:-}" ] && [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
     sed_i "s#\(image: \"otel/opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION\"#" "$OTEL_GATEWAY_MANIFEST_PATH"
   fi
   echo "Updated images.collector.tag in $NR_K8S_VALUES_PATH, COLLECTOR_CONTRIB_IMAGE in $ENV_PATH, and $OTEL_GATEWAY_MANIFEST_PATH"
@@ -210,7 +210,7 @@ if template_chart "nri-bundle" "newrelic/nri-bundle" "$NRI_BUNDLE_RENDER_VERSION
   NRI_BUNDLE_UPDATED=true
 fi
 
-if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
+if [ -n "${OTEL_GATEWAY_MANIFEST_PATH:-}" ] && [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
   echo "Validating Standalone OTel Collector Gateway manifest syntax..."
   kubectl apply --dry-run=client -f "$OTEL_GATEWAY_MANIFEST_PATH" > /dev/null
   echo "✓ OTel Gateway manifest is valid"

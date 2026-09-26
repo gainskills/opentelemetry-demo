@@ -4,7 +4,7 @@ apiVersion: v1
 kind: ServiceAccount
 automountServiceAccountToken: true
 metadata:
-  labels:
+  labels:    
     helm.sh/chart: kube-state-metrics-6.1.5
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: metrics
@@ -55,21 +55,6 @@ metadata:
     release: "nri-bundle"
   name: nri-bundle-newrelic-logging
   namespace: newrelic
-
----
-# Source: nri-bundle/charts/nri-kube-events/templates/serviceaccount.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  name: nri-bundle-nri-kube-events
-  namespace: newrelic
-  annotations:
 
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/controlplane/agent-configmap.yaml
@@ -393,6 +378,7 @@ data:
   #        REMOTE_MONITORING: true
   #      labels:
   #        env: production
+  
 
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/kubelet/scraper-configmap.yaml
@@ -435,7 +421,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  namespace: newrelic
+  namespace: newrelic  
   name: nri-bundle-newrelic-logging-lua
 data:
   payload.lua: |-
@@ -466,7 +452,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   namespace: newrelic
-  labels:
+  labels:     
     app: newrelic-logging
     chart: newrelic-logging-1.41.1
     heritage: Helm
@@ -486,7 +472,7 @@ data:
         HTTP_Listen   ::
         HTTP_Port     2020
         Health_Check  On
-
+    
     [INPUT]
         Name              tail
         Alias             pod-logs-tailer
@@ -497,7 +483,7 @@ data:
         Mem_Buf_Limit     7MB
         Skip_Long_Lines   On
         Refresh_Interval  10
-
+    
     [FILTER]
         Name           kubernetes
         Match          kube.*
@@ -509,14 +495,14 @@ data:
         K8S-Logging.Exclude ${K8S_LOGGING_EXCLUDE}
         Labels         Off
         Annotations    Off
-
+    
     [FILTER]
         Name           nest
         Match          *
         Alias          kubernetes-attribute-lifter
         Operation      lift
         Nested_under   kubernetes
-
+    
     [FILTER]
         Name           record_modifier
         Match          *
@@ -528,7 +514,7 @@ data:
         Allowlist_key  stream
         Allowlist_key  message
         Allowlist_key  log
-
+    
     [OUTPUT]
         Name           newrelic
         Match          *
@@ -538,8 +524,8 @@ data:
         lowDataMode    ${LOW_DATA_MODE}
         sendMetrics    ${SEND_OUTPUT_PLUGIN_METRICS}
         Retry_Limit    ${RETRY_LIMIT}
-
-
+    
+    
     [INPUT]
         Name   dummy
         Tag    buildInfo
@@ -568,58 +554,11 @@ data:
   parsers.conf: |
 
 ---
-# Source: nri-bundle/charts/nri-kube-events/templates/agent-configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  name: nri-bundle-nri-kube-events-agent-config
-  namespace: newrelic
-data:
-  newrelic-infra.yml: |
-    is_forward_only: true
-    http_server_enabled: true
-    http_server_port: 8001
-
-    custom_attributes:
-      demo.telemetry.source: nri-bundle
-
----
-# Source: nri-bundle/charts/nri-kube-events/templates/configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  name: nri-bundle-nri-kube-events-config
-  namespace: newrelic
-data:
-  config.yaml: |-
-    sinks:
-      - name: newRelicInfra
-        config:
-          agentEndpoint: http://localhost:8001/v1/data
-          clusterName: opentelemetry-demo-nri
-          agentHTTPTimeout: 30s
-    captureDescribe: true
-    describeRefresh: 24h
-    captureEvents: true
-
----
 # Source: nri-bundle/charts/kube-state-metrics/templates/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
+  labels:    
     helm.sh/chart: kube-state-metrics-6.1.5
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: metrics
@@ -630,130 +569,132 @@ metadata:
     newrelic.com/custom-ksm: "true"
   name: nri-bundle-kube-state-metrics
 rules:
-  - apiGroups: ["certificates.k8s.io"]
-    resources:
-      - certificatesigningrequests
-    verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - configmaps
-    verbs: ["list", "watch"]
+- apiGroups: ["certificates.k8s.io"]
+  resources:
+  - certificatesigningrequests
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["batch"]
-    resources:
-      - cronjobs
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - configmaps
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["apps"]
-    resources:
-      - deployments
-    verbs: ["list", "watch"]
+- apiGroups: ["batch"]
+  resources:
+  - cronjobs
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["autoscaling"]
-    resources:
-      - horizontalpodautoscalers
-    verbs: ["list", "watch"]
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["networking.k8s.io"]
-    resources:
-      - ingresses
-    verbs: ["list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources:
+  - horizontalpodautoscalers
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["batch"]
-    resources:
-      - jobs
-    verbs: ["list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources:
+  - ingresses
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["coordination.k8s.io"]
-    resources:
-      - leases
-    verbs: ["list", "watch"]
+- apiGroups: ["batch"]
+  resources:
+  - jobs
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - limitranges
-    verbs: ["list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources:
+  - leases
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["admissionregistration.k8s.io"]
-    resources:
-      - mutatingwebhookconfigurations
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - limitranges
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - namespaces
-    verbs: ["list", "watch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources:
+    - mutatingwebhookconfigurations
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["networking.k8s.io"]
-    resources:
-      - networkpolicies
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - namespaces
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - nodes
-    verbs: ["list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources:
+  - networkpolicies
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - persistentvolumeclaims
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - nodes
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - persistentvolumes
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - persistentvolumeclaims
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["policy"]
-    resources:
-      - poddisruptionbudgets
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - persistentvolumes
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - pods
-    verbs: ["list", "watch"]
+- apiGroups: ["policy"]
+  resources:
+    - poddisruptionbudgets
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - replicationcontrollers
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - resourcequotas
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - replicationcontrollers
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - secrets
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - resourcequotas
+  verbs: ["list", "watch"]
 
-  - apiGroups: [""]
-    resources:
-      - services
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - secrets
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["apps"]
-    resources:
-      - statefulsets
-    verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources:
+  - services
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["storage.k8s.io"]
-    resources:
-      - storageclasses
-    verbs: ["list", "watch"]
+- apiGroups: ["apps"]
+  resources:
+  - statefulsets
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["admissionregistration.k8s.io"]
-    resources:
-      - validatingwebhookconfigurations
-    verbs: ["list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources:
+    - storageclasses
+  verbs: ["list", "watch"]
 
-  - apiGroups: ["storage.k8s.io"]
-    resources:
-      - volumeattachments
-    verbs: ["list", "watch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources:
+    - validatingwebhookconfigurations
+  verbs: ["list", "watch"]
+
+- apiGroups: ["storage.k8s.io"]
+  resources:
+    - volumeattachments
+  verbs: ["list", "watch"]
+
 
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/clusterrole.yaml
@@ -773,17 +714,17 @@ rules:
   # Consider using rbac.kubeletFineGrainedAuth: true when KEP-2862 is available
   - apiGroups: [""]
     resources:
-      - "nodes/metrics" # Required for kubelet metrics endpoints
-      - "nodes/stats" # Required for kubelet stats endpoint
-      - "nodes/proxy" # Grants access to all kubelet endpoints
+      - "nodes/metrics"  # Required for kubelet metrics endpoints
+      - "nodes/stats"    # Required for kubelet stats endpoint
+      - "nodes/proxy"    # Grants access to all kubelet endpoints
     verbs: ["get", "list"]
-  - apiGroups: [""]
+  - apiGroups: [ "" ]
     resources:
       - "services"
       - "nodes"
       - "namespaces"
       - "pods"
-    verbs: ["get", "list", "watch"]
+    verbs: [ "get", "list", "watch" ]
   - apiGroups: ["discovery.k8s.io"]
     resources:
       - "endpointslices"
@@ -808,15 +749,15 @@ rules:
   # Consider using rbac.kubeletFineGrainedAuth: true when KEP-2862 is available
   - apiGroups: [""]
     resources:
-      - "nodes/metrics" # Required for kubelet metrics endpoints
-      - "nodes/stats" # Required for kubelet stats endpoint
-      - "nodes/proxy" # Grants access to all kubelet endpoints
+      - "nodes/metrics"  # Required for kubelet metrics endpoints
+      - "nodes/stats"    # Required for kubelet stats endpoint
+      - "nodes/proxy"    # Grants access to all kubelet endpoints
     verbs: ["get", "list"]
-  - apiGroups: [""]
+  - apiGroups: [ "" ]
     resources:
       - "pods"
       - "nodes"
-    verbs: ["get", "list", "watch"]
+    verbs: [ "get", "list", "watch" ]
   - nonResourceURLs: ["/metrics"]
     verbs: ["get", "head"]
 ---
@@ -824,7 +765,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
+  labels:     
     app: newrelic-logging
     chart: newrelic-logging-1.41.1
     heritage: Helm
@@ -838,57 +779,11 @@ rules:
       - pods
     verbs: ["get", "list", "watch"]
 ---
-# Source: nri-bundle/charts/nri-kube-events/templates/clusterrole.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  name: nri-bundle-nri-kube-events
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - events
-      - namespaces
-      - nodes
-      - jobs
-      - persistentvolumes
-      - persistentvolumeclaims
-      - pods
-      - services
-    verbs:
-      - get
-      - watch
-      - list
-  - apiGroups:
-      - apps
-    resources:
-      - daemonsets
-      - deployments
-    verbs:
-      - get
-      - watch
-      - list
-  - apiGroups:
-      - batch
-    resources:
-      - cronjobs
-      - jobs
-    verbs:
-      - get
-      - watch
-      - list
----
 # Source: nri-bundle/charts/kube-state-metrics/templates/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  labels:
+  labels:    
     helm.sh/chart: kube-state-metrics-6.1.5
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: metrics
@@ -903,9 +798,9 @@ roleRef:
   kind: ClusterRole
   name: nri-bundle-kube-state-metrics
 subjects:
-  - kind: ServiceAccount
-    name: nri-bundle-kube-state-metrics
-    namespace: newrelic
+- kind: ServiceAccount
+  name: nri-bundle-kube-state-metrics
+  namespace: newrelic
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -923,9 +818,9 @@ roleRef:
   kind: ClusterRole
   name: nri-bundle-newrelic-infrastructure
 subjects:
-  - kind: ServiceAccount
-    name: nri-bundle-newrelic-infrastructure
-    namespace: newrelic
+- kind: ServiceAccount
+  name: nri-bundle-newrelic-infrastructure
+  namespace: newrelic
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/controlplane/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -951,7 +846,7 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  labels:
+  labels:     
     app: newrelic-logging
     chart: newrelic-logging-1.41.1
     heritage: Helm
@@ -963,29 +858,9 @@ roleRef:
   kind: ClusterRole
   name: nri-bundle-newrelic-logging
 subjects:
-  - kind: ServiceAccount
-    name: nri-bundle-newrelic-logging
-    namespace: newrelic
----
-# Source: nri-bundle/charts/nri-kube-events/templates/clusterrolebinding.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  name: nri-bundle-nri-kube-events
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: nri-bundle-nri-kube-events
-subjects:
-  - kind: ServiceAccount
-    name: nri-bundle-nri-kube-events
-    namespace: newrelic
+- kind: ServiceAccount
+  name: nri-bundle-newrelic-logging
+  namespace: newrelic
 ---
 # Source: nri-bundle/charts/kube-state-metrics/templates/service.yaml
 apiVersion: v1
@@ -993,7 +868,7 @@ kind: Service
 metadata:
   name: nri-bundle-kube-state-metrics
   namespace: newrelic
-  labels:
+  labels:    
     helm.sh/chart: kube-state-metrics-6.1.5
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: metrics
@@ -1006,12 +881,12 @@ metadata:
 spec:
   type: "ClusterIP"
   ports:
-    - name: "http"
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
-
-  selector:
+  - name: "http"
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  
+  selector:    
     app.kubernetes.io/name: kube-state-metrics
     app.kubernetes.io/instance: nri-bundle
 
@@ -1026,12 +901,12 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 spec:
   ports:
-    - port: 443
-      targetPort: 8443
+  - port: 443
+    targetPort: 8443
   selector:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/name: nri-metadata-injection
@@ -1051,7 +926,7 @@ metadata:
     mode: privileged
   name: nri-bundle-nrk8s-controlplane
 spec:
-  updateStrategy:
+  updateStrategy: 
     rollingUpdate:
       maxUnavailable: 1
     type: RollingUpdate
@@ -1175,15 +1050,15 @@ spec:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: Exists
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/controlplane
-                    operator: Exists
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/etcd
-                    operator: Exists
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+            - matchExpressions:
+              - key: node-role.kubernetes.io/controlplane
+                operator: Exists
+            - matchExpressions:
+              - key: node-role.kubernetes.io/etcd
+                operator: Exists
       tolerations:
         - operator: "Exists"
           effect: "NoSchedule"
@@ -1208,7 +1083,7 @@ metadata:
     mode: privileged
   name: nri-bundle-nrk8s-kubelet
 spec:
-  updateStrategy:
+  updateStrategy: 
     rollingUpdate:
       maxUnavailable: 1
     type: RollingUpdate
@@ -1249,8 +1124,11 @@ spec:
               value: "false"
 
             - name: "NRI_KUBERNETES_TESTCONNECTIONENDPOINT"
-
+              
               value: /healthz
+              
+
+              
 
             - name: "NRI_KUBERNETES_NODENAME"
               valueFrom:
@@ -1278,7 +1156,7 @@ spec:
               memory: 150M
         - name: agent
           image: "docker.io/newrelic/infrastructure-bundle:3.3.39"
-          args: ["newrelic-infra"]
+          args: [ "newrelic-infra" ]
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: true
@@ -1406,7 +1284,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   namespace: newrelic
-  labels:
+  labels:     
     app: newrelic-logging
     chart: newrelic-logging-1.41.1
     heritage: Helm
@@ -1443,7 +1321,7 @@ spec:
             - name: ENDPOINT
               value: "https://log-api.newrelic.com/log/v1"
             - name: SOURCE
-              value: "k8s"
+              value:  "k8s"
             - name: LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -1480,13 +1358,13 @@ spec:
               value: "false"
             - name: METRICS_HOST
               value: "metric-api.newrelic.com"
-
-            - name: FLUENTBIT_METRICS_TIER
+            
+            - name: FLUENTBIT_METRICS_TIER 
               value: "basic"
             - name: DAEMONSET_NAME
-              value: nri-bundle-newrelic-logging
+              value: nri-bundle-newrelic-logging  
             - name: NAMESPACE
-              value: newrelic
+              value: newrelic 
           command:
             - /fluent-bit/bin/fluent-bit
             - -c
@@ -1529,7 +1407,6 @@ spec:
           hostPath:
             path: /var
       nodeSelector:
-        kubernetes.io/os: linux
       tolerations:
         - effect: NoSchedule
           operator: Exists
@@ -1543,7 +1420,7 @@ kind: Deployment
 metadata:
   name: nri-bundle-kube-state-metrics
   namespace: newrelic
-  labels:
+  labels:    
     helm.sh/chart: kube-state-metrics-6.1.5
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: metrics
@@ -1554,7 +1431,7 @@ metadata:
     newrelic.com/custom-ksm: "true"
 spec:
   selector:
-    matchLabels:
+    matchLabels:      
       app.kubernetes.io/name: kube-state-metrics
       app.kubernetes.io/instance: nri-bundle
   replicas: 1
@@ -1563,7 +1440,7 @@ spec:
   revisionHistoryLimit: 10
   template:
     metadata:
-      labels:
+      labels:        
         helm.sh/chart: kube-state-metrics-6.1.5
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/component: metrics
@@ -1585,48 +1462,47 @@ spec:
           type: RuntimeDefault
       dnsPolicy: ClusterFirst
       containers:
-        - name: kube-state-metrics
-          args:
-            - --port=8080
-            - --resources=certificatesigningrequests,configmaps,cronjobs,deployments,horizontalpodautoscalers,ingresses,jobs,leases,limitranges,mutatingwebhookconfigurations,namespaces,networkpolicies,nodes,persistentvolumeclaims,persistentvolumes,poddisruptionbudgets,pods,replicationcontrollers,resourcequotas,secrets,services,statefulsets,storageclasses,validatingwebhookconfigurations,volumeattachments
-            - --metric-labels-allowlist=pods=[*],namespaces=[*],deployments=[*]
-            - --metric-annotations-allowlist=pods=[*],namespaces=[*],deployments=[*]
-          imagePullPolicy: IfNotPresent
-          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.16.0
-          ports:
-            - containerPort: 8080
-              name: "http"
-          livenessProbe:
-            failureThreshold: 3
-            httpGet:
-              httpHeaders:
-              path: /livez
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 5
-          readinessProbe:
-            failureThreshold: 3
-            httpGet:
-              httpHeaders:
-              path: /readyz
-              port: 8081
-              scheme: HTTP
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 5
-          resources: {}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-      nodeSelector:
-        kubernetes.io/os: linux
+      - name: kube-state-metrics
+        args:
+        - --port=8080
+        - --resources=certificatesigningrequests,configmaps,cronjobs,deployments,horizontalpodautoscalers,ingresses,jobs,leases,limitranges,mutatingwebhookconfigurations,namespaces,networkpolicies,nodes,persistentvolumeclaims,persistentvolumes,poddisruptionbudgets,pods,replicationcontrollers,resourcequotas,secrets,services,statefulsets,storageclasses,validatingwebhookconfigurations,volumeattachments
+        - --metric-labels-allowlist=pods=[*],namespaces=[*],deployments=[*]
+        - --metric-annotations-allowlist=pods=[*],namespaces=[*],deployments=[*]
+        imagePullPolicy: IfNotPresent
+        image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.16.0
+        ports:
+        - containerPort: 8080
+          name: "http"
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            httpHeaders:
+            path: /livez
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            httpHeaders:
+            path: /readyz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
 
 ---
 # Source: nri-bundle/charts/newrelic-infrastructure/templates/ksm/deployment.yaml
@@ -1643,7 +1519,7 @@ metadata:
     mode: privileged
   name: nri-bundle-nrk8s-ksm
 spec:
-  strategy:
+  strategy: 
     type: Recreate
   selector:
     matchLabels:
@@ -1690,7 +1566,7 @@ spec:
             - name: nri-kubernetes-config
               mountPath: /etc/newrelic-infra/nri-kubernetes.yml
               subPath: nri-kubernetes.yml
-          resources:
+          resources: 
             limits:
               memory: 850M
             requests:
@@ -1731,7 +1607,7 @@ spec:
             - name: config
               mountPath: /etc/newrelic-infra.yml
               subPath: newrelic-infra.yml
-          resources:
+          resources: 
             limits:
               memory: 850M
             requests:
@@ -1759,12 +1635,12 @@ spec:
       affinity:
         podAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: kube-state-metrics
-                topologyKey: kubernetes.io/hostname
-              weight: 100
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: kube-state-metrics
+              topologyKey: kubernetes.io/hostname
+            weight: 100
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
@@ -1785,103 +1661,6 @@ spec:
         kubernetes.io/os: linux
 
 ---
-# Source: nri-bundle/charts/nri-kube-events/templates/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nri-bundle-nri-kube-events
-  namespace: newrelic
-  labels:
-    app.kubernetes.io/instance: nri-bundle
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: nri-kube-events
-    app.kubernetes.io/version: 2.21.6
-    helm.sh/chart: nri-kube-events-3.21.6
-  annotations:
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: nri-kube-events
-  template:
-    metadata:
-      annotations:
-        checksum/config: ef55577dc861f6da6b4f97b2fd4800653ae8b19721a19373980471751e519bd8
-        checksum/agent-config: 35fa8c3f19f6b3f468ae23b17640170d0b3a8ae5ee504ac849502bd5d28d3d03
-      labels:
-        app.kubernetes.io/instance: nri-bundle
-        app.kubernetes.io/name: nri-kube-events
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-      containers:
-        - name: kube-events
-          image: docker.io/newrelic/nri-kube-events:2.21.6
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: false
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-          args: ["-config", "/app/config/config.yaml", "-loglevel", "debug"]
-          volumeMounts:
-            - name: config-volume
-              mountPath: /app/config
-        - name: forwarder
-          image: docker.io/newrelic/k8s-events-forwarder:1.79.0
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: false
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-          ports:
-            - containerPort: 8001
-          env:
-            - name: NRIA_LICENSE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: newrelic-license-key
-                  key: license-key
-
-            - name: NRIA_OVERRIDE_HOSTNAME_SHORT
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: spec.nodeName
-
-          volumeMounts:
-            - mountPath: /var/db/newrelic-infra/data
-              name: tmpfs-data
-            - mountPath: /var/db/newrelic-infra/user_data
-              name: tmpfs-user-data
-            - mountPath: /tmp
-              name: tmpfs-tmp
-            - name: config
-              mountPath: /etc/newrelic-infra.yml
-              subPath: newrelic-infra.yml
-      serviceAccountName: nri-bundle-nri-kube-events
-      volumes:
-        - name: config
-          configMap:
-            name: nri-bundle-nri-kube-events-agent-config
-            items:
-              - key: newrelic-infra.yml
-                path: newrelic-infra.yml
-        - name: config-volume
-          configMap:
-            name: nri-bundle-nri-kube-events-config
-        - name: tmpfs-data
-          emptyDir: {}
-        - name: tmpfs-user-data
-          emptyDir: {}
-        - name: tmpfs-tmp
-          emptyDir: {}
-      nodeSelector:
-        kubernetes.io/os: linux
-
-        kubernetes.io/os: linux
-      hostNetwork: false
-
----
 # Source: nri-bundle/charts/nri-metadata-injection/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -1892,8 +1671,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 spec:
   replicas: 1
   selector:
@@ -1912,43 +1691,44 @@ spec:
         runAsNonRoot: true
       hostNetwork: false
       containers:
-        - name: nri-metadata-injection
-          image: "docker.io/newrelic/k8s-metadata-injection:1.44.3"
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: clusterName
-              value: opentelemetry-demo-nri
-            - name: NEW_RELIC_K8S_METADATA_INJECTION_PORT
-              value: "8443"
-            - name: NEW_RELIC_K8S_METADATA_INJECTION_HEALTH_PORT
-              value: "8080"
-            - name: NEW_RELIC_K8S_METADATA_INJECTION_LOG_LEVEL
-              value: "info"
-          ports:
-            - containerPort: 8443
-              protocol: TCP
-          volumeMounts:
-            - name: tls-key-cert-pair
-              mountPath: /etc/tls-key-cert-pair
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 1
-            periodSeconds: 1
-          resources:
-            limits:
-              memory: 80M
-            requests:
-              cpu: 100m
-              memory: 30M
-      volumes:
+      - name: nri-metadata-injection
+        image: "docker.io/newrelic/k8s-metadata-injection:1.45.0"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: clusterName
+          value: opentelemetry-demo-nri
+        - name: NEW_RELIC_K8S_METADATA_INJECTION_PORT
+          value: "8443"
+        - name: NEW_RELIC_K8S_METADATA_INJECTION_HEALTH_PORT
+          value: "8080"
+        - name: NEW_RELIC_K8S_METADATA_INJECTION_LOG_LEVEL
+          value: "info"
+        ports:
+          - containerPort: 8443
+            protocol: TCP
+        volumeMounts:
         - name: tls-key-cert-pair
-          secret:
-            secretName: nri-bundle-nri-metadata-injection-admission
+          mountPath: /etc/tls-key-cert-pair
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 1
+        resources:
+          
+          limits:
+            memory: 80M
+          requests:
+            cpu: 100m
+            memory: 30M
+      volumes:
+      - name: tls-key-cert-pair
+        secret:
+          secretName: nri-bundle-nri-metadata-injection-admission
       nodeSelector:
         kubernetes.io/os: linux
-
+        
         kubernetes.io/os: linux
 
 ---
@@ -1961,32 +1741,32 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 webhooks:
-  - name: metadata-injection.newrelic.com
-    clientConfig:
-      service:
-        name: nri-bundle-nri-metadata-injection
-        namespace: newrelic
-        path: "/mutate"
-      caBundle: ""
-    rules:
-      - operations: ["CREATE"]
-        apiGroups: [""]
-        apiVersions: ["v1"]
-        resources: ["pods"]
-        scope: Namespaced
-    namespaceSelector:
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: NotIn
-          values: ["kube-public", "kube-node-lease", "kube-system"]
-
-    failurePolicy: Ignore
-    timeoutSeconds: 28
-    sideEffects: None
-    admissionReviewVersions: ["v1", "v1beta1"]
+- name: metadata-injection.newrelic.com
+  clientConfig:
+    service:
+      name: nri-bundle-nri-metadata-injection
+      namespace: newrelic
+      path: "/mutate"
+    caBundle: ""
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: ["kube-public","kube-node-lease","kube-system"]
+    
+  failurePolicy: Ignore
+  timeoutSeconds: 28
+  sideEffects: None
+  admissionReviewVersions: ["v1", "v1beta1"]
 ---
 # Source: nri-bundle/charts/nri-metadata-injection/templates/admission-webhooks/job-patch/serviceaccount.yaml
 apiVersion: v1
@@ -1997,14 +1777,14 @@ metadata:
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade,post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
-
+    
   labels:
     app: nri-metadata-injection-admission
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 
 ---
 # Source: nri-bundle/charts/nri-metadata-injection/templates/admission-webhooks/job-patch/clusterrole.yaml
@@ -2020,8 +1800,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 rules:
   - apiGroups:
       - admissionregistration.k8s.io
@@ -2044,8 +1824,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
     app: nri-metadata-injection-admission
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -2071,8 +1851,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 rules:
   - apiGroups:
       - ""
@@ -2097,8 +1877,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -2123,8 +1903,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 spec:
   template:
     metadata:
@@ -2134,8 +1914,8 @@ spec:
         app.kubernetes.io/instance: nri-bundle
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: nri-metadata-injection
-        app.kubernetes.io/version: 1.44.3
-        helm.sh/chart: nri-metadata-injection-4.36.3
+        app.kubernetes.io/version: 1.45.0
+        helm.sh/chart: nri-metadata-injection-4.37.0
     spec:
       containers:
         - name: create
@@ -2157,7 +1937,7 @@ spec:
         runAsNonRoot: true
       nodeSelector:
         kubernetes.io/os: linux
-
+        
         kubernetes.io/os: linux
 
 ---
@@ -2175,8 +1955,8 @@ metadata:
     app.kubernetes.io/instance: nri-bundle
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: nri-metadata-injection
-    app.kubernetes.io/version: 1.44.3
-    helm.sh/chart: nri-metadata-injection-4.36.3
+    app.kubernetes.io/version: 1.45.0
+    helm.sh/chart: nri-metadata-injection-4.37.0
 spec:
   template:
     metadata:
@@ -2186,8 +1966,8 @@ spec:
         app.kubernetes.io/instance: nri-bundle
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: nri-metadata-injection
-        app.kubernetes.io/version: 1.44.3
-        helm.sh/chart: nri-metadata-injection-4.36.3
+        app.kubernetes.io/version: 1.45.0
+        helm.sh/chart: nri-metadata-injection-4.37.0
     spec:
       containers:
         - name: patch
@@ -2209,5 +1989,6 @@ spec:
         runAsNonRoot: true
       nodeSelector:
         kubernetes.io/os: linux
-
+        
         kubernetes.io/os: linux
+
