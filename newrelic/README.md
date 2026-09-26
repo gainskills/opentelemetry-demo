@@ -146,13 +146,58 @@ NOTES:
   Feature Flags UI     http://localhost:8080/feature/
 ```
 
-> **_NOTE:_** It can take anywhere from 2 - 5 minutes for Pods to start up and telemetry to flow through the OTel Collector and on to New Relic.  Please have patience.  If you want to check on the status of the OTel collector, you can run `kubectl logs deployment/otel-collector -n opentelemetry-demo`
+> **_NOTE:_** It can take anywhere from 2 - 5 minutes for Pods to start up and telemetry to flow through the OTel Collector and on to New Relic.  Please have patience.  If you want to check on the status of the OTel collector, you can run `kubectl logs -l app.kubernetes.io/name=nr-k8s-otel-collector -n opentelemetry-demo` (or `kubectl logs -l app.kubernetes.io/name=opentelemetry-collector -n opentelemetry-demo` if using the Pure OTel Collector).
 
 ### Customize Kubernetes installation
 
-You can apply changes to the deployed OpenTelemetry Demo by modifying any values in `newrelic/k8s/helm/opentelemetry-demo.yaml`. See supported values in the official OpenTelemetry Demo Helm Chart [here](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-demo#chart-parameters).
+You can apply changes to the deployed OpenTelemetry Demo by modifying any values in `newrelic/k8s/helm/opentelemetry-demo-base.yaml`. See supported values in the official OpenTelemetry Demo Helm Chart [here](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-demo#chart-parameters).
 
 After you save changes, you can re-run `install-k8s.sh` to apply changes and redeploy the modified components.
+
+### Pipeline Control Gateway TLS
+
+New Relic APM agents only talk to their collector over TLS, so when APM test
+workloads are routed to the Pipeline Control Gateway (PCG), its
+`nrproprietaryreceiver` serves HTTPS on
+`pipeline-control-gateway.newrelic.svc.cluster.local:443`.
+
+Both `install-k8s.sh` and the CLI provision the TLS material before installing
+PCG:
+
+| Object | Namespace | Contents |
+|---|---|---|
+| Secret `pcg-tls` | `newrelic` | `tls.crt`, `tls.key` (PCG's certificate) and `ca.crt` (the demo CA that signed it) |
+| ConfigMap `pcg-ca` | `opentelemetry-demo` | `ca.crt` only, for the APM workloads to trust |
+
+The CA's private key is discarded after signing. An existing `pcg-tls` Secret
+is reused, so re-running an installer never rotates the certificate.
+
+The `apm-test-config` ConfigMap sets, per workload group (native / hybrid), the
+collector host and the CA bundle to trust. The bundle is empty for SaaS.
+Each APM workload trusts the bundle in its language's own way (Java
+`ca_bundle_path`, Node.js `NODE_EXTRA_CA_CERTS`, Python
+`NEW_RELIC_CA_BUNDLE_PATH`, .NET the OS trust store). A workload exits at
+startup if a bundle is configured but `pcg-ca` is missing.
+
+To check that the APM workloads reach PCG over TLS and that PCG forwards their
+data, run `./validate-pcg-apm.sh` (it skips when nothing is routed to PCG).
+
+TLS is only configured for PCG's standalone mode. When PCG is managed by
+Agent Control (`NEW_RELIC_CLIENT_ID` / `NEW_RELIC_CLIENT_SECRET` set), its
+configuration comes from New Relic and does not include these TLS settings.
+
+To rotate the certificate:
+
+```bash
+kubectl delete secret pcg-tls -n newrelic
+./install-k8s.sh   # or the CLI; generates a new CA and certificate
+kubectl rollout restart deployment/pipeline-control-gateway -n newrelic
+kubectl rollout restart deployment -n opentelemetry-demo -l app.kubernetes.io/part-of=apm-test-apps
+```
+
+Both restarts are required: PCG and the agents load the certificate and CA
+only at startup. Until the workloads restart, their agents fail TLS
+verification against the new certificate.
 
 ### Cleanup Kubernetes
 

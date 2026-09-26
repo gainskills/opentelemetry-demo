@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"text/template"
+	"time"
 )
 
 // fetchBrowserConfigFromTF retrieves browser monitoring metadata from Terraform outputs.
@@ -102,15 +103,22 @@ func handleK8s(action string, cfg *Config) {
 		// webhook stalls pod admission cluster-wide on later installs.
 		nriNS := Charts["nri-bundle"].NS
 		uninstallRelease(Charts["nri-bundle"].Name, nriNS, true)
+		pcgNS := Charts["pcg"].NS
+		uninstallRelease(Charts["pcg"].Name, pcgNS, false)
+		uninstallRelease(Charts["agent-control"].Name, pcgNS, false)
 		exec.Command("kubectl", "delete",
 			"mutatingwebhookconfiguration,validatingwebhookconfiguration,clusterrole,clusterrolebinding",
 			"-l", "app.kubernetes.io/instance="+Charts["nri-bundle"].Name, "--ignore-not-found").Run()
-		if _, err := os.Stat(Paths["otel-gateway-manifest"]); err == nil {
-			runCommand("kubectl", []string{"delete", "-f", Paths["otel-gateway-manifest"], "--ignore-not-found"}, nil)
+		if _, err := os.Stat(Paths["apm-test-apps"]); err == nil {
+			runCommand("kubectl", []string{"delete", "-f", Paths["apm-test-apps"], "--ignore-not-found"}, nil)
 		}
+		runCommand("kubectl", []string{"delete", "secret", "newrelic-agent-control-secret", "-n", pcgNS, "--ignore-not-found"}, nil)
 		runCommand("kubectl", []string{"delete", "ns", ns, "--ignore-not-found"}, nil)
 		if nriNS != ns {
 			runCommand("kubectl", []string{"delete", "ns", nriNS, "--ignore-not-found"}, nil)
+		}
+		if pcgNS != ns && pcgNS != nriNS {
+			runCommand("kubectl", []string{"delete", "ns", pcgNS, "--ignore-not-found"}, nil)
 		}
 		return
 	}
@@ -146,21 +154,210 @@ func handleK8s(action string, cfg *Config) {
 		installChart("nri-bundle", []string{Paths["nri-bundle-values"]}, "global.region="+strings.ToLower(cfg.Region))
 	}
 
-	otelValues := []string{Paths["otel-values"]}
-	if cfg.EnableBrowser != nil && *cfg.EnableBrowser {
-		otelValues = append(otelValues, Paths["otel-browser-values"])
-	}
-	otelSets := []string{}
-	if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
-		otelValues = append(otelValues, Paths["otel-nri-values"])
-		otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
-	}
-	installChart("otel-demo", otelValues, otelSets...)
+	if cfg.EnablePcg != nil && *cfg.EnablePcg {
+		pcgNS := Charts["pcg"].NS
+		exec.Command("kubectl", "create", "ns", pcgNS).Run()
+		applyLicenseSecret(pcgNS, cfg.LicenseKey)
+		ensurePcgTLS(pcgNS, ns)
 
-	if cfg.EnableOtelGateway != nil && *cfg.EnableOtelGateway {
-		fmt.Println("\n>>> Installing Standalone OpenTelemetry Collector Gateway...")
-		runCommand("kubectl", []string{"apply", "-f", Paths["otel-gateway-manifest"]}, nil)
-		fmt.Printf("  To stream Gateway events: kubectl logs -f -n %s deployment/otel-gateway\n", ns)
+		fleetId := cfg.PcgFleetId
+		if fleetId == "" {
+			fleetId = cfg.PcgFleetName
+		}
+		orgId := cfg.OrganizationId
+		if orgId == "" {
+			orgId = cfg.AccountId
+		}
+
+		fleetDesc := fleetId
+		if fleetDesc == "" {
+			fleetDesc = "unassigned"
+		}
+
+		if cfg.ClientId != "" && cfg.ClientSecret != "" && orgId != "" {
+			fmt.Println("\n>>> Installing Agent Control Deployment (with System Identity credentials)...")
+			acSets := []string{
+				"global.region=" + strings.ToLower(cfg.Region),
+				"systemIdentity.organizationId=" + orgId,
+				"systemIdentity.parentIdentity.clientId=" + cfg.ClientId,
+				"systemIdentity.parentIdentity.clientSecret=" + cfg.ClientSecret,
+				"config.cdEnabled=false",
+				"subAgentsNamespace=" + pcgNS,
+			}
+			if fleetId != "" {
+				acSets = append(acSets, "config.fleet_control.fleet_id="+fleetId)
+			}
+			installChart("agent-control", []string{Paths["agent-control-values"]}, acSets...)
+
+			pcgRegionalSets := []string{
+				"global.region=" + strings.ToLower(cfg.Region),
+			}
+			if fleetId != "" {
+				pcgRegionalSets = append(pcgRegionalSets, "fleet_id="+fleetId)
+			}
+			switch strings.ToLower(cfg.Region) {
+			case "eu":
+				pcgRegionalSets = append(pcgRegionalSets,
+					"generated.receivers.nrproprietaryreceiver.nr_host=collector.eu01.nr-data.net",
+					"generated.exporters.otlp/exporter.endpoint=https://otlp.eu01.nr-data.net:443",
+					"generated.exporters.otlphttp.endpoint=https://otlp.eu01.nr-data.net",
+				)
+			case "jp":
+				pcgRegionalSets = append(pcgRegionalSets,
+					"generated.receivers.nrproprietaryreceiver.nr_host=collector.jp01.nr-data.net",
+				)
+			}
+
+			fmt.Println("\n>>> Waiting up to 60s for Agent Control to create pipeline-control-gateway-custom-config ConfigMap...")
+			found := false
+			for waited := 0; waited < 60; waited += 3 {
+				cmd := exec.Command("kubectl", "get", "configmap", "pipeline-control-gateway-custom-config", "-n", pcgNS)
+				if err := cmd.Run(); err == nil {
+					fmt.Printf("Found pipeline-control-gateway-custom-config ConfigMap in namespace %s.\n", pcgNS)
+					found = true
+					break
+				}
+				time.Sleep(3 * time.Second)
+			}
+
+			if found {
+				fmt.Printf("\n>>> Deploying PCG with custom ConfigMap from Agent Control (Fleet: %s)...\n", fleetDesc)
+				sets := append(pcgRegionalSets, "deployment.customConfigMap=pipeline-control-gateway-custom-config")
+				installChart("pcg", []string{Paths["pcg-values"]}, sets...)
+			} else {
+				fmt.Println("\n>>> Warning: pipeline-control-gateway-custom-config was not created within 60s.")
+				fmt.Println(">>> Deploying PCG with in-cluster configuration rules as fallback...")
+				installChart("pcg", []string{Paths["pcg-values"]}, pcgRegionalSets...)
+			}
+		} else {
+			pcgRegionalSets := []string{
+				"global.region=" + strings.ToLower(cfg.Region),
+			}
+			if fleetId != "" {
+				pcgRegionalSets = append(pcgRegionalSets, "fleet_id="+fleetId)
+			}
+			switch strings.ToLower(cfg.Region) {
+			case "eu":
+				pcgRegionalSets = append(pcgRegionalSets,
+					"generated.receivers.nrproprietaryreceiver.nr_host=collector.eu01.nr-data.net",
+					"generated.exporters.otlp/exporter.endpoint=https://otlp.eu01.nr-data.net:443",
+					"generated.exporters.otlphttp.endpoint=https://otlp.eu01.nr-data.net",
+				)
+			case "jp":
+				pcgRegionalSets = append(pcgRegionalSets,
+					"generated.receivers.nrproprietaryreceiver.nr_host=collector.jp01.nr-data.net",
+				)
+			}
+			fmt.Println("\n>>> Note: NEW_RELIC_CLIENT_ID / NEW_RELIC_CLIENT_SECRET not provided. Skipping Agent Control fleet daemon (PCG will run with in-cluster ConfigMap rules).")
+			installChart("pcg", []string{Paths["pcg-values"]}, pcgRegionalSets...)
+		}
+	}
+
+	if cfg.EnableOtelDemoApps == nil || *cfg.EnableOtelDemoApps {
+		otelValues := []string{Paths["otel-values"]}
+		if cfg.EnableBrowser != nil && *cfg.EnableBrowser {
+			otelValues = append(otelValues, Paths["otel-browser-values"])
+		}
+		otelSets := []string{}
+		switch cfg.OtelDemoDest {
+		case "pcg":
+			otelValues = append(otelValues, Paths["otel-pcg-values"])
+		case "nrdot":
+			// Uses standard base values which route to NRDOT gateway
+		case "otel-collector", "saas":
+			otelValues = append(otelValues, Paths["otel-nri-values"])
+			otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
+		default:
+			if cfg.RouteDemoToPcg != nil && *cfg.RouteDemoToPcg {
+				otelValues = append(otelValues, Paths["otel-pcg-values"])
+			} else if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
+				otelValues = append(otelValues, Paths["otel-nri-values"])
+				otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
+			}
+		}
+		installChart("otel-demo", otelValues, otelSets...)
+	} else {
+		fmt.Println("\n>>> Skipping OpenTelemetry Demo microservices installation (ENABLE_OTEL_DEMO_APPS=false).")
+	}
+
+	deployNative := (cfg.EnableApmNativeApps != nil && *cfg.EnableApmNativeApps)
+	deployHybrid := (cfg.EnableApmHybridApps != nil && *cfg.EnableApmHybridApps)
+	if !deployNative && !deployHybrid && (cfg.EnableApmTestApps != nil && *cfg.EnableApmTestApps) {
+		deployNative = true
+		deployHybrid = true
+	}
+
+	if deployNative || deployHybrid {
+		applyApmTestConfig(ns, cfg)
+
+		if deployNative {
+			fmt.Printf("\n>>> Deploying Pure New Relic APM test workloads (destination: %s)...\n", cfg.ApmNativeDest)
+			runCommand("kubectl", []string{"apply", "-f", Paths["apm-test-apps"], "-l", "app.kubernetes.io/component=native-apm"}, nil)
+		}
+
+		if deployHybrid {
+			fmt.Printf("\n>>> Deploying New Relic APM Hybrid test workloads (destination: %s)...\n", cfg.ApmHybridDest)
+			runCommand("kubectl", []string{"apply", "-f", Paths["apm-test-apps"], "-l", "app.kubernetes.io/component=hybrid-apm"}, nil)
+		}
+	}
+}
+
+// resolveApmDestination maps an APM destination (pcg|saas) to the collector
+// host and the CA bundle path agents must trust. PCG serves TLS with the demo
+// CA from the pcg-ca ConfigMap; SaaS uses public trust (empty bundle).
+// Mirrors resolve_apm_destination in scripts/install-k8s.sh.
+func resolveApmDestination(dest, region string) (host, caBundle string) {
+	if dest == "pcg" {
+		return "pipeline-control-gateway." + PcgNamespace + ".svc.cluster.local", "/pcg-ca/ca.crt"
+	}
+	switch strings.ToLower(region) {
+	case "eu":
+		return "collector.eu01.nr-data.net", ""
+	case "jp":
+		return "collector.jp01.nr-data.net", ""
+	default:
+		return "collector.newrelic.com", ""
+	}
+}
+
+// applyApmTestConfig creates or updates the apm-test-config ConfigMap with the chosen endpoints
+func applyApmTestConfig(namespace string, cfg *Config) {
+	defaultDest := "saas"
+	if cfg.EnablePcg != nil && *cfg.EnablePcg {
+		defaultDest = "pcg"
+	}
+	destOrDefault := func(dest string) string {
+		if dest == "" {
+			return defaultDest
+		}
+		return dest
+	}
+	nativeHost, nativeCA := resolveApmDestination(destOrDefault(cfg.ApmNativeDest), cfg.Region)
+	hybridHost, hybridCA := resolveApmDestination(destOrDefault(cfg.ApmHybridDest), cfg.Region)
+
+	caLabel := func(ca string) string {
+		if ca == "" {
+			return "<public>"
+		}
+		return ca
+	}
+	fmt.Printf("\n>>> Applying APM test configuration ConfigMap...\n")
+	fmt.Printf("    Native APM: host=%s ca_bundle=%s\n", nativeHost, caLabel(nativeCA))
+	fmt.Printf("    Hybrid APM: host=%s ca_bundle=%s\n", hybridHost, caLabel(hybridCA))
+
+	configMap := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   map[string]string{"name": "apm-test-config", "namespace": namespace},
+		"data": map[string]string{
+			"NATIVE_NEW_RELIC_HOST":      nativeHost,
+			"NATIVE_NEW_RELIC_CA_BUNDLE": nativeCA,
+			"HYBRID_NEW_RELIC_HOST":      hybridHost,
+			"HYBRID_NEW_RELIC_CA_BUNDLE": hybridCA,
+		},
+	}
+	if err := kubectlObject("apply", configMap); err != nil {
+		fmt.Printf("Error applying APM test configmap: %v\n", err)
 	}
 }
 

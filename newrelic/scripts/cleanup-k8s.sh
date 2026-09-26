@@ -56,13 +56,19 @@ cleanup_helm_release "$OTEL_DEMO_RELEASE_NAME" "$OTEL_DEMO_NAMESPACE"
 cleanup_helm_release "$NR_K8S_RELEASE_NAME" "$OTEL_DEMO_NAMESPACE"
 cleanup_helm_release "$NRI_BUNDLE_RELEASE_NAME" "$NRI_BUNDLE_NAMESPACE"
 cleanup_cluster_scoped_leftovers "$NRI_BUNDLE_RELEASE_NAME"
-if [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
-    echo "Deleting Standalone OTel Collector Gateway..."
-    kubectl delete -f "$OTEL_GATEWAY_MANIFEST_PATH" --ignore-not-found
+cleanup_helm_release "$PCG_RELEASE_NAME" "$PCG_NAMESPACE"
+cleanup_helm_release "$AGENT_CONTROL_RELEASE_NAME" "$PCG_NAMESPACE"
+cleanup_cluster_scoped_leftovers "$AGENT_CONTROL_RELEASE_NAME"
+if [ -f "$APM_TEST_APPS_PATH" ]; then
+    echo "Deleting New Relic APM test workloads..."
+    kubectl delete -f "$APM_TEST_APPS_PATH" --ignore-not-found
 fi
 cleanup_namespace "$OTEL_DEMO_NAMESPACE"
 if [ "$NRI_BUNDLE_NAMESPACE" != "$OTEL_DEMO_NAMESPACE" ]; then
     cleanup_namespace "$NRI_BUNDLE_NAMESPACE"
+fi
+if [ "$PCG_NAMESPACE" != "$OTEL_DEMO_NAMESPACE" ] && [ "$PCG_NAMESPACE" != "$NRI_BUNDLE_NAMESPACE" ]; then
+    cleanup_namespace "$PCG_NAMESPACE"
 fi
 
 echo "Cleanup completed successfully."

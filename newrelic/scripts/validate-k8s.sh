@@ -68,6 +68,9 @@ kubectl wait --for=jsonpath='{.status.phase}'=Running pod --all \
   -n opentelemetry-demo --timeout=300s
 echo "All pods are in Running state!"
 
+# Verify APM workloads routed to the Pipeline Control Gateway (skips otherwise)
+"$SCRIPT_DIR/validate-pcg-apm.sh"
+
 # Pause briefly to allow data to propagate to New Relic
 echo "Pausing to allow data to propagate to New Relic..."
 sleep 30

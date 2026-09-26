@@ -46,8 +46,6 @@ kube-state-metrics:
   prometheusScrape: false
   customLabels:
     newrelic.com/custom-ksm: "true"
-  nodeSelector:
-    kubernetes.io/os: linux
   collectors:
     - certificatesigningrequests
     - configmaps
@@ -89,8 +87,6 @@ newrelic-logging:
   enableLinux: true
   enableWindows: false
   sendMetrics: false
-  nodeSelector:
-    kubernetes.io/os: linux
   # Fluent Bit custom filter: Drops high-frequency health check and probe logs
   # (/healthz, /readyz, kube-probe) at the node level before they leave the host,
   # saving worker node network egress and New Relic log ingestion volume.
@@ -106,7 +102,7 @@ nri-prometheus:
 
 # Kubernetes Event Watcher (Deployment):
 # DISABLED (enabled: false) to eliminate duplicate event collection when running alongside
-# the OpenTelemetry Collector Deployment (otel-collector-gateway.yaml).
+# the OpenTelemetry Collector Deployment (opentelemetry-demo-pure.yaml).
 # The OTel Collector's k8s_events receiver watches the K8s API server and exports Warning
 # events as Log records. If nri-kube-events is enabled here, every cluster event is
 # captured twice: once by NRI (InfrastructureEvent) and once by OTel (Log).
