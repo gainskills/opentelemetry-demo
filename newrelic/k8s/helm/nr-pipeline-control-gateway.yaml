@@ -88,6 +88,7 @@ resources:
 # ==============================================================================
 generated:
   receivers:
+    "otlp/receiver": null
     "prometheus/monitoring": null
     nrproprietaryreceiver:
       nr_host: "collector.newrelic.com"
@@ -108,46 +109,54 @@ generated:
 # ==============================================================================
   processors:
     # --- Health Check Trace / Span Filter ---
-    # Uncomment the 'traces' block below to drop health check spans
+    # Drops health check spans, transaction sample traces, and SQL traces
     filter/Traces:
       error_mode: ignore
-      # traces:
-      #   span:
-      #     - 'attributes["healthcheck"] == "true"'
-      #     - 'attributes["http.route"] == "/healthz"'
-      #     - 'name == "WebTransaction/Custom/healthz"'
+      traces:
+        span:
+          - 'attributes["healthcheck"] == "true"'
+          - 'attributes["http.route"] == "/healthz"'
+          - 'IsMatch(name, "(?i).*healthz.*")'
+          - 'IsMatch(attributes["nr.path"], "(?i).*healthz.*")'
+          - 'IsMatch(attributes["uri"], "(?i).*healthz.*")'
+          - 'IsMatch(attributes["http.url"], "(?i).*healthz.*")'
 
     # --- Health Check Metric Filter ---
-    # Uncomment the 'metrics' block below to drop health check metrics
+    # Drops health check metrics
     filter/Metrics:
       error_mode: ignore
-      # metrics:
-      #   metric:
-      #     - 'name == "Custom/App/HealthStatus"'
+      metrics:
+        metric:
+          - 'name == "Custom/App/HealthStatus"'
+          - 'IsMatch(name, "(?i).*health.*")'
 
     # --- Health Check Log Filter ---
-    # Uncomment the 'logs' block below to drop health check logs
+    # Drops health check logs and APM transaction events
     filter/Logs:
       error_mode: ignore
-      # logs:
-      #   log_record:
-      #     - 'IsMatch(body, ".*[Hh]ealth check.*")'
+      logs:
+        log_record:
+          - 'IsMatch(body, "(?i).*[Hh]ealth.*")'
+          - 'IsMatch(attributes["name"], "(?i).*healthz.*")'
+          - 'IsMatch(attributes["transaction_name"], "(?i).*healthz.*")'
+          - 'IsMatch(attributes["http.route"], "(?i).*healthz.*")'
 
 # ==============================================================================
 # Pipeline Control Gateway Exporters
-# Overrides upstream Helm chart default which hardcodes /v1/traces in otlphttp,
-# causing /v1/traces/v1/metrics 404 errors during internal metrics export
+# Disables unused OTLP exporters; APM telemetry exports via nrcollectorexporter
 # ==============================================================================
   exporters:
-    otlphttp:
-      endpoint: "https://otlp.nr-data.net"
-      headers:
-        api-key: "${env:NEW_RELIC_LICENSE_KEY}"
+    "otlp/exporter": null
+    otlphttp: null
 
 # ==============================================================================
 # Pipeline Control Gateway Service Pipelines
-# Disables internal Prometheus self-monitoring export pipeline
+# Dedicated to New Relic APM Agent (Native & Hybrid) pipelines only.
+# Disables generic OTLP ingestion and Prometheus monitoring pipelines.
 # ==============================================================================
   service:
     pipelines:
+      "traces/otlp": null
+      "metrics/otlp": null
+      "logs/otlp": null
       "metrics/monitoring": null

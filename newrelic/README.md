@@ -199,6 +199,20 @@ Both restarts are required: PCG and the agents load the certificate and CA
 only at startup. Until the workloads restart, their agents fail TLS
 verification against the new certificate.
 
+### APM Agent Environment Variables for Gateway Routing
+
+To redirect an APM agent from New Relic SaaS to the Pipeline Control Gateway (PCG), configure the following environment variables:
+
+| Variable / Setting | Value for PCG | Purpose |
+|---|---|---|
+| `NEW_RELIC_HOST` | `pipeline-control-gateway.newrelic.svc.cluster.local` | Overrides default SaaS collector (`collector.newrelic.com`) across all agent languages |
+| `NEW_RELIC_PORT` | `443` | PCG Service port for TLS proprietary ingestion |
+| `NEW_RELIC_CA_BUNDLE_PATH` | `/pcg-ca/ca.crt` | (Python) Trust internal demo CA certificate |
+| `NODE_EXTRA_CA_CERTS` | `/pcg-ca/ca.crt` | (Node.js) Trust internal demo CA certificate |
+| `-Dnewrelic.config.ca_bundle_path` | `/pcg-ca/ca.crt` | (Java) JVM system property to trust internal demo CA certificate |
+
+> **Note**: Unlike OpenTelemetry SDKs which use `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://pipeline-control-gateway:4318`), New Relic APM agents (in both Native and Hybrid mode) use `NEW_RELIC_HOST` on port 443.
+
 ### Cleanup Kubernetes
 
 To uninstall the demo from your cluster, you can use the `cleanup-k8s.sh` script.  This script will uninstall the helm releases and delete the `opentelemetry-demo` namespace, along with the Infrastructure bundle's namespace and its cluster-scoped resources if it was installed.
