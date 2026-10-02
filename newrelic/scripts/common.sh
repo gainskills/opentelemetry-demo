@@ -10,7 +10,7 @@ TS_FULL=$(date +"%Y-%m-%d %H:%M:%S")
 
 # Kubernetes variables
 OTEL_DEMO_CHART_VERSION="0.42.1"
-NR_K8S_CHART_VERSION="0.14.2"
+NR_K8S_CHART_VERSION="0.14.3"
 NRI_BUNDLE_CHART_VERSION="8.0.28"
 OTEL_DEMO_RELEASE_NAME=otel-demo
 NR_K8S_RELEASE_NAME=nr-k8s-otel-collector
@@ -44,6 +44,7 @@ PCG_TLS_SECRET=pcg-tls
 PCG_CA_CONFIGMAP=pcg-ca
 AGENT_CONTROL_VALUES_PATH=${AGENT_CONTROL_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/nr-agent-control-deployment.yaml"}
 CONFIG_GO_PATH=${CONFIG_GO_PATH:-"$SCRIPT_DIR/../cli/config.go"}
+CHART_VERSIONS_PATH=${CHART_VERSIONS_PATH:-"$SCRIPT_DIR/../k8s/chart-versions.yaml"}
 
 # Docker variables
 # Upstream v3.0.0 split the old monolithic docker-compose.yml into these layered

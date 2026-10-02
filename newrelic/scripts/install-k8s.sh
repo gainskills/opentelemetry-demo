@@ -138,18 +138,23 @@ ensure_pcg_tls() {
 # command override.
 setup_pg_monitoring() {
   echo "Setting up postgresql receiver monitoring access for $POSTGRES_MONITOR_USER..."
-  if ! kubectl rollout status deployment/astronomy-db -n "$OTEL_DEMO_NAMESPACE" --timeout=120s; then
+  if ! kubectl rollout status deployment/astronomy-db -n "$OTEL_DEMO_NAMESPACE" --timeout=120s >/dev/null 2>&1; then
     echo "Warning: astronomy-db deployment not ready; skipping monitoring setup. Run manually later."
     return
   fi
   local app_db_ddl="GRANT USAGE ON SCHEMA catalog TO $POSTGRES_MONITOR_USER; GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO $POSTGRES_MONITOR_USER; ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT SELECT ON TABLES TO $POSTGRES_MONITOR_USER; GRANT USAGE ON SCHEMA accounting TO $POSTGRES_MONITOR_USER; GRANT SELECT ON ALL TABLES IN SCHEMA accounting TO $POSTGRES_MONITOR_USER; ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT SELECT ON TABLES TO $POSTGRES_MONITOR_USER;"
-  if kubectl exec -n "$OTEL_DEMO_NAMESPACE" deployment/astronomy-db -- \
-      sh -c "psql -v ON_ERROR_STOP=1 -U postgres -d astronomy_db -c '$app_db_ddl'"; then
-    echo "postgresql monitoring configured for $POSTGRES_MONITOR_USER."
-  else
-    echo "Warning: failed to configure postgresql monitoring for $POSTGRES_MONITOR_USER. Run manually with:"
-    echo "  kubectl exec -n $OTEL_DEMO_NAMESPACE deployment/astronomy-db -- sh -c 'psql -U postgres -d astronomy_db -c \"$app_db_ddl\"'"
-  fi
+  for i in {1..30}; do
+    if kubectl exec -n "$OTEL_DEMO_NAMESPACE" deployment/astronomy-db -- pg_isready -U postgres >/dev/null 2>&1; then
+      if kubectl exec -n "$OTEL_DEMO_NAMESPACE" deployment/astronomy-db -- \
+          sh -c "psql -v ON_ERROR_STOP=1 -U postgres -d astronomy_db -c '$app_db_ddl'"; then
+        echo "postgresql monitoring configured for $POSTGRES_MONITOR_USER."
+        return
+      fi
+    fi
+    sleep 1
+  done
+  echo "Warning: failed to configure postgresql monitoring for $POSTGRES_MONITOR_USER. Run manually with:"
+  echo "  kubectl exec -n $OTEL_DEMO_NAMESPACE deployment/astronomy-db -- sh -c 'psql -U postgres -d astronomy_db -c \"$app_db_ddl\"'"
 }
 
 ensure_namespace() {

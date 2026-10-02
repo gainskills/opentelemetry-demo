@@ -61,6 +61,13 @@ template_chart() {
     return 1
 }
 
+write_chart_versions_yaml() {
+  local otel_demo nr_k8s
+  otel_demo=$(sed -n 's/^OTEL_DEMO_CHART_VERSION="\(.*\)"$/\1/p' "$COMMON_SCRIPT_PATH")
+  nr_k8s=$(sed -n 's/^NR_K8S_CHART_VERSION="\(.*\)"$/\1/p' "$COMMON_SCRIPT_PATH")
+  printf 'otelDemoChartVersion: "%s"\nnrK8sChartVersion: "%s"\n' "$otel_demo" "$nr_k8s" > "$CHART_VERSIONS_PATH"
+}
+
 update_version_in_script() {
     local var_name="$1"
     local version="$2"
@@ -177,10 +184,18 @@ else
   echo "NR K8s chart is up to date."
 fi
 
-NR_K8S_RENDER_VERSION="${LATEST_NR_K8S_CHART_VERSION:-$CURR_NR_K8S_CHART_VERSION}"
-if template_chart "nr-k8s-otel-collector" "newrelic/nr-k8s-otel-collector" "$NR_K8S_RENDER_VERSION" "opentelemetry-demo" "$NR_K8S_VALUES_PATH" "$NR_K8S_RENDER_PATH"; then
-  echo "Completed updating the New Relic K8s instrumentation manifest!"
-  NR_K8S_UPDATED=true
+write_chart_versions_yaml
+
+# Re-render the NR K8s manifest when the chart version changed OR the contrib tag changed.
+# The render is gated on a values change too (not just a chart bump) so that an updated
+# images.collector.tag actually lands in the rendered manifest.
+if [ "$NR_K8S_UPDATED" = true ] || [ "$CONTRIB_UPDATED" = true ]; then
+  NR_K8S_RENDER_VERSION="${LATEST_NR_K8S_CHART_VERSION:-$CURR_NR_K8S_CHART_VERSION}"
+  echo "Rendering nr-k8s-otel-collector chart (version $NR_K8S_RENDER_VERSION)"
+  if template_chart "nr-k8s-otel-collector" "newrelic/nr-k8s-otel-collector" "$NR_K8S_RENDER_VERSION" "opentelemetry-demo" "$NR_K8S_VALUES_PATH" "$NR_K8S_RENDER_PATH"; then
+    echo "Completed updating the New Relic K8s instrumentation manifest!"
+    NR_K8S_UPDATED=true
+  fi
 fi
 
 LATEST_NRI_BUNDLE_CHART_VERSION=$(helm search repo newrelic/nri-bundle --versions | awk 'NR==2 {print $2}')

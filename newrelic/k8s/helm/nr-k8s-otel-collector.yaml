@@ -26,6 +26,7 @@ logsPipeline:
 images:
   collector:
     registry: ""
+    # Keep 0.161.0: the 0.162.0 tag does not exist on Docker Hub.
     repository: otel/opentelemetry-collector-contrib
     tag: "0.161.0"
     pullPolicy: IfNotPresent
@@ -140,6 +141,16 @@ deployment:
           resource:
             newrelic.service.type: otel_collector
             service.name: nr-k8s-otel-collector-deployment
+    - |-
+      --config=yaml:receivers:
+        otlp:
+          protocols:
+            http:
+              cors:
+                allowed_origins:
+                  - http://frontend-proxy:8080
+                allowed_headers:
+                  - "*"
   configMap:
     extraConfig:
       receivers:
@@ -325,7 +336,6 @@ deployment:
                 - set(span.attributes["http.route"], "/api/recommendations") where IsMatch(span.attributes["http.target"], "\\/api\\/recommendations") # e.g. # /api/recommendations?productIds=...
                 # e.g. "/api/data?contextKeys=telescopes" or /api/data/?contextKeys=cameras
                 - set(span.attributes["http.route"], "/api/data") where IsMatch(span.attributes["http.target"], "\\/api\\/data.*")
-
         resource/otel-demo:
           attributes:
             - key: service.instance.id
@@ -342,32 +352,6 @@ deployment:
             - key: service.instance.id
               value: "otel-demo-astronomy-db"
               action: upsert
-
-        # otelgrpc never sets error.type on rpc.server.call.duration /
-        # rpc.client.call.duration even when the RPC failed, so NR's
-        # error.type-based error-rate rule can't match gRPC traffic. This is
-        # gRPC not following semconv, not a New Relic gap:
-        # https://github.com/open-telemetry/opentelemetry-go-contrib/issues/9426
-        # Backfill a coarse error.type from the status code NR does receive
-        # so error rate shows up; remove once otelgrpc sets error.type itself.
-        transform/grpc_error_type:
-          error_mode: ignore
-          metric_statements:
-            - context: datapoint
-              # Multiple entries under conditions: are OR'd together, not
-              # AND'd - two separate list items here would match every
-              # rpc.server.call.duration/rpc.client.call.duration datapoint
-              # on the metric-name check alone, tagging error.type=SERVER
-              # ERROR on successful calls too. Both checks must be one
-              # condition string joined with "and".
-              conditions:
-                - >-
-                  (metric.name == "rpc.server.call.duration" or metric.name
-                  == "rpc.client.call.duration") and
-                  attributes["rpc.response.status_code"] != nil and
-                  attributes["rpc.response.status_code"] != "OK"
-              statements:
-                - set(attributes["error.type"], "SERVER ERROR")
 
         # Sets kafka.cluster.name as a datapoint attribute on Kafka metrics only, since a
         # resource attribute would leak onto sibling non-Kafka metrics sharing the resource.
@@ -436,7 +420,6 @@ deployment:
             - transform/kafka_cluster_name
             - k8s_attributes/ksm
             - transform/strip_ad_metric_metadata
-            - transform/grpc_error_type
             - cumulativetodelta
             - batch
           exporters:
@@ -450,7 +433,6 @@ deployment:
             - memory_limiter
             - resourcedetection/otel-demo
             - resource/otel-demo
-            - transform/otel-demo
             - k8s_attributes/ksm
             - gen_ai_normalizer
             - batch
@@ -464,7 +446,6 @@ deployment:
             - memory_limiter
             - resourcedetection/otel-demo
             - resource/otel-demo
-            - transform/otel-demo
             - batch
           exporters:
             - otlp_http/newrelic
