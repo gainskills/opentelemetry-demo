@@ -141,6 +141,27 @@ generated:
           - 'IsMatch(attributes["transaction_name"], "(?i).*healthz.*")'
           - 'IsMatch(attributes["http.route"], "(?i).*healthz.*")'
 
+    # --- PII Mask / Delete Transform ---
+    # Test rules for /api/secure: mask (replace value) email and credit card,
+    # delete (remove attribute) auth token. Applied to spans and log bodies.
+    # Attribute keys match what the APM test apps set; verify in NRDB after changes.
+    transform/PII:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'replace_pattern(attributes["payment.credit_card"], "\\d{4}-\\d{4}-\\d{4}-\\d{4}", "****-****-****-****")'
+            - 'replace_pattern(attributes["user.email"], "[^@\\s]+@", "***@")'
+            - 'delete_key(attributes, "auth.token")'
+      log_statements:
+        - context: log
+          statements:
+            - 'replace_pattern(body.string, "\\d{4}-\\d{4}-\\d{4}-\\d{4}", "****-****-****-****")'
+            - 'replace_pattern(body.string, "[^@\\s]+@", "***@")'
+            - 'replace_pattern(attributes["payment.credit_card"], "\\d{4}-\\d{4}-\\d{4}-\\d{4}", "****-****-****-****")'
+            - 'replace_pattern(attributes["user.email"], "[^@\\s]+@", "***@")'
+            - 'delete_key(attributes, "auth.token")'
+
 # ==============================================================================
 # Pipeline Control Gateway Exporters
 # Disables unused OTLP exporters; APM telemetry exports via nrcollectorexporter
@@ -160,3 +181,12 @@ generated:
       "metrics/otlp": null
       "logs/otlp": null
       "metrics/monitoring": null
+      # Helm replaces lists, so restate the full processor chain (filter first, then mask).
+      "traces/nr":
+        receivers: [nrproprietaryreceiver]
+        processors: [filter/Traces, transform/PII]
+        exporters: [nrcollectorexporter]
+      "logs/nr":
+        receivers: [nrproprietaryreceiver]
+        processors: [filter/Logs, transform/PII]
+        exporters: [nrcollectorexporter]
