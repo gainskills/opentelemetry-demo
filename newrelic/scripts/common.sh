@@ -32,7 +32,6 @@ NR_K8S_RENDER_PATH=${NR_K8S_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nr-k8s-ote
 NRI_BUNDLE_VALUES_PATH=${NRI_BUNDLE_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/nri-bundle.yaml"}
 NRI_BUNDLE_RENDER_PATH=${NRI_BUNDLE_RENDER_PATH:-"$SCRIPT_DIR/../k8s/rendered/nri-bundle.yaml"}
 OTEL_DEMO_NRI_VALUES_PATH=${OTEL_DEMO_NRI_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/opentelemetry-demo-pure.yaml"}
-OTEL_DEMO_PCG_VALUES_PATH=${OTEL_DEMO_PCG_VALUES_PATH:-"$SCRIPT_DIR/../k8s/helm/opentelemetry-demo-pcg.yaml"}
 APM_TEST_APPS_PATH=${APM_TEST_APPS_PATH:-"$SCRIPT_DIR/../k8s/apm-test-apps.yaml"}
 PCG_CHART_VERSION="2.5.0"
 AGENT_CONTROL_CHART_VERSION="1.7.20"
@@ -333,9 +332,6 @@ prompt_for_application_suites() {
 
   if [ "$ENABLE_OTEL_DEMO_APPS" = "y" ]; then
     local otel_opts=()
-    if [ "${ENABLE_PCG:-n}" = "y" ]; then
-      otel_opts+=("pcg:Pipeline Control Gateway (pipeline-control-gateway:4317)")
-    fi
     if [ "${ENABLE_NRDOT:-n}" = "y" ]; then
       otel_opts+=("nrdot:NRDOT Collector (nr-k8s-otel-collector-gateway:4317)")
     fi
@@ -345,11 +341,7 @@ prompt_for_application_suites() {
     otel_opts+=("saas:Direct to New Relic SaaS (https://otlp.nr-data.net:4318)")
 
     prompt_for_choice "OTEL_DEMO_DEST" "Choose destination for OpenTelemetry Demo services:" 1 "${otel_opts[@]}"
-    if [ "$OTEL_DEMO_DEST" = "pcg" ]; then
-      export ROUTE_DEMO_TO_PCG="y"
-    else
-      export ROUTE_DEMO_TO_PCG="n"
-    fi
+    export ROUTE_DEMO_TO_PCG="n"
   else
     export ROUTE_DEMO_TO_PCG="n"
   fi

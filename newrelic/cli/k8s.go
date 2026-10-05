@@ -260,17 +260,13 @@ func handleK8s(action string, cfg *Config) {
 		}
 		otelSets := []string{}
 		switch cfg.OtelDemoDest {
-		case "pcg":
-			otelValues = append(otelValues, Paths["otel-pcg-values"])
 		case "nrdot":
 			// Uses standard base values which route to NRDOT gateway
 		case "otel-collector", "saas":
 			otelValues = append(otelValues, Paths["otel-nri-values"])
 			otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
 		default:
-			if cfg.RouteDemoToPcg != nil && *cfg.RouteDemoToPcg {
-				otelValues = append(otelValues, Paths["otel-pcg-values"])
-			} else if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
+			if (cfg.EnableNrdot != nil && !*cfg.EnableNrdot) && (cfg.EnableDemoOtelCollector != nil && *cfg.EnableDemoOtelCollector) {
 				otelValues = append(otelValues, Paths["otel-nri-values"])
 				otelSets = append(otelSets, "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint="+otlpEndpoint(cfg))
 			}

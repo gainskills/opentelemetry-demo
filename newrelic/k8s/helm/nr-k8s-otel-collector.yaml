@@ -161,7 +161,8 @@ deployment:
           config:
             scrape_configs:
               - job_name: ad
-                scrape_interval: 10s
+                scrape_interval: 30s # 30s resolution is sufficient for ad counters; reduces metric datapoint volume.
+                                     # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver
                 static_configs:
                   - targets: ["ad:9465"]
 
@@ -172,7 +173,8 @@ deployment:
           password: ${env:POSTGRES_PASSWORD}
           databases:
             - astronomy_db
-          collection_interval: 15s
+          collection_interval: 30s # Reduces postgresql.* metric datapoint volume.
+                                   # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/postgresqlreceiver
           tls:
             insecure: true
             insecure_skip_verify: true
@@ -232,11 +234,13 @@ deployment:
             - brokers
             - topics
             - consumers
-          collection_interval: 15s
+          collection_interval: 30s # Reduces kafka_metrics volume; decrease to 15s if tighter lag alerting is needed.
+                                   # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kafkametricsreceiver
 
       connectors:
         spanmetrics:
-          metrics_flush_interval: 30s
+          # metrics_flush_interval: 60s # Spec default is 60s; unneeded unless overriding flush cadence.
+                                        # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector
           aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
           dimensions:
             - name: http.method

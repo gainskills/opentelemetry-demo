@@ -38,6 +38,16 @@ default:
       value: otel-collector
     - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
       value: delta
+    - name: GIT_REPOSITORY_URL
+      value: "https://github.com/gainskills/opentelemetry-demo"
+    - name: GIT_BRANCH
+      value: "main"
+    - name: GIT_COMMIT_SHA
+      value: "" # Populated by CI/CD via $GITHUB_SHA for New Relic Change Tracking
+    - name: CI_PIPELINE_RUN_ID
+      value: "" # Populated by CI/CD via $GITHUB_RUN_ID or $BUILD_BUILDID
+    - name: CI_PIPELINE_RUN_URL
+      value: "" # Populated by CI/CD deep-link to workflow/build execution
     - name: OTEL_RESOURCE_ATTRIBUTES
       value: >-
         service.name=$(OTEL_SERVICE_NAME),
@@ -48,9 +58,36 @@ default:
         k8s.pod.name=$(OTEL_POD_NAME),
         k8s.pod.uid=$(OTEL_POD_UID),
         k8s.namespace.name=$(OTEL_NAMESPACE_NAME),
-        k8s.cluster.name=$(OTEL_CLUSTER_NAME)
+        k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+        vcs.repository.url.full=$(GIT_REPOSITORY_URL),
+        vcs.ref.head.name=$(GIT_BRANCH),
+        vcs.ref.head.revision=$(GIT_COMMIT_SHA),
+        cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+        cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL)
     - name: OTEL_METRIC_EXPORT_INTERVAL
-      value: "10000"
+      value: "60000" # Unit: ms (60s / 1 min; OTel default). 60s export cycle reduces SDK metric datapoints.
+                     # Ref: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#periodic-exporting-metricreader
+    # --- Optional cost & best-practice settings (uncomment to test; keep in sync across overlays) ---
+    - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+      value: "4095" # Aligns with New Relic's 4,095-char string limit to prevent NrIntegrationError while preserving full SQL queries and URLs.
+                    # Ref: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#attribute-limits
+                    # Backend limit: https://docs.newrelic.com/docs/opentelemetry/best-practices/opentelemetry-otlp/#attribute-limits
+    - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+      value: "64" # Caps attributes per span to prevent bloat while accommodating standard semconv and business attributes (spec default: 128).
+                  # Ref: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#span-limits
+    - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+      value: "20" # Caps span events to protect against runaway exception loops while accommodating retries and streaming chunks (spec default: 128).
+                  # Ref: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#span-limits
+    # - name: OTEL_LOGS_EXPORTER
+    #   value: "otlp" # Spec default. Must remain "otlp" when OTel Collector handles log routing.
+    #                 # If nri-bundle Fluent Bit is also running, disable newrelic-logging in nri-bundle.yaml to eliminate 2x duplicate billing.
+    #                 # Ref: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#logs-exporter
+    # - name: OTEL_EXPORTER_OTLP_COMPRESSION
+    #   value: gzip # Recommended for external egress to New Relic; in-cluster app->collector adds pod CPU with no ingest cost benefit.
+    # - name: OTEL_TRACES_SAMPLER
+    #   value: parentbased_always_on # Keep 100% in SDK (spec default) so Collector spanmetrics computes accurate RED metrics.
+    # - name: OTEL_TRACES_SAMPLER_ARG
+    #   value: "1.0" # In Collector topologies, trace sampling is performed in the Collector (e.g. via tail_sampling) rather than at the head.
 
 # ==============================================================================
 # WORKLOAD ARCHITECTURE MODE: DEPLOYMENT vs. DAEMONSET
@@ -93,6 +130,11 @@ opentelemetry-collector:
           name: newrelic-license-key
           key: license-key
   config:
+    # connectors:
+    #   span_metrics:
+    #     metrics_flush_interval: 60s # Spec default is 60s; unneeded unless overriding flush cadence.
+    #                                 # Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector
+
     receivers:
       k8s_events:
         auth_type: serviceAccount
@@ -147,17 +189,16 @@ opentelemetry-collector:
           api-key: ${env:NEW_RELIC_LICENSE_KEY}
     service:
       pipelines:
+        # Debug exporter omitted from traces/metrics/logs to avoid excessive CPU and pod log bloat.
         traces:
           exporters:
             - otlphttp/newrelic
             - otlp_grpc/jaeger
-            - debug
             - span_metrics
         metrics:
           exporters:
             - otlphttp/newrelic
             - otlp_http/prometheus
-            - debug
         logs:
           receivers:
             - otlp
@@ -172,7 +213,6 @@ opentelemetry-collector:
           exporters:
             - otlphttp/newrelic
             - opensearch
-            - debug
 
 # ------------------------------------------------------------------------------
 # [INACTIVE] DAEMONSET MODE CONFIGURATION (READY-TO-TOGGLE TEMPLATE)

@@ -173,6 +173,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-python-native"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -200,6 +206,17 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            # - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            # - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume.
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT
+            #   value: trace_id_ratio_based # Default adaptive; sample root traces by ratio instead
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT_TRACE_ID_RATIO_BASED_RATIO
+            #   value: "0.25" # Ratio required with trace_id_ratio_based
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.headers.cookie request.headers.authorization" # Python: space-separated list of attribute keys to exclude from all destinations.
           startupProbe:
             httpGet:
               path: /healthz
@@ -343,6 +360,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-python-hybrid"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -370,6 +393,17 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            # - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            # - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume.
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT
+            #   value: trace_id_ratio_based # Default adaptive; sample root traces by ratio instead
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT_TRACE_ID_RATIO_BASED_RATIO
+            #   value: "0.25" # Ratio required with trace_id_ratio_based
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.headers.cookie request.headers.authorization" # Python: space-separated list of attribute keys to exclude from all destinations.
           startupProbe:
             httpGet:
               path: /healthz
@@ -503,6 +537,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-node-native"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -530,6 +570,19 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+              value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+              value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume.
+            - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT
+              value: trace_id_ratio_based # Default adaptive; sample root traces by ratio instead
+            - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT_RATIO
+              value: "0.25" # Ratio required with trace_id_ratio_based
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.parameters.*" # Node: comma-separated keys or wildcard prefixes (* at end) to exclude from all destinations.
+            # - name: NEW_RELIC_CUSTOM_INSIGHTS_EVENTS_ENABLED
+            #   value: "false" # Disables custom events recorded via recordCustomEvent() (default: true).
           startupProbe:
             httpGet:
               path: /healthz
@@ -663,6 +716,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-node-hybrid"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -690,6 +749,19 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            # - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            # - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume.
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT
+            #   value: trace_id_ratio_based # Default adaptive; sample root traces by ratio instead
+            # - name: NEW_RELIC_DISTRIBUTED_TRACING_SAMPLER_ROOT_RATIO
+            #   value: "0.25" # Ratio required with trace_id_ratio_based
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.parameters.*" # Node: comma-separated keys or wildcard prefixes (* at end) to exclude from all destinations.
+            # - name: NEW_RELIC_CUSTOM_INSIGHTS_EVENTS_ENABLED
+            #   value: "false" # Disables custom events recorded via recordCustomEvent() (default: true).
           startupProbe:
             httpGet:
               path: /healthz
@@ -894,6 +966,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-java-native"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -915,6 +993,7 @@ spec:
               value: "STDOUT"
             - name: NEW_RELIC_LOG_LEVEL
               value: "info"
+            # Java agent docs list only sampler.remote_parent_sampled/_not_sampled (no root sampler)
           startupProbe:
             httpGet:
               path: /healthz
@@ -1119,6 +1198,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-java-hybrid"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -1140,6 +1225,7 @@ spec:
               value: "STDOUT"
             - name: NEW_RELIC_LOG_LEVEL
               value: "info"
+            # Java agent docs list only sampler.remote_parent_sampled/_not_sampled (no root sampler)
           startupProbe:
             httpGet:
               path: /healthz
@@ -1309,6 +1395,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-dotnet-native"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -1342,6 +1434,15 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_LOG_LEVEL_DENYLIST
+              value: "debug,trace" # Stop forwarding Debug/Trace logs to NR (Logging__LogLevel__Default=Debug stays for local output)
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            # - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            # - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume (default 2000, max 10000).
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.headers.cookie,request.headers.authorization" # .NET: comma-separated list of attribute keys to exclude from all destinations.
           startupProbe:
             httpGet:
               path: /healthz
@@ -1511,6 +1612,12 @@ spec:
           env:
             - name: NEW_RELIC_APP_NAME
               value: "apm-dotnet-hybrid"
+            - name: GIT_REPOSITORY_URL
+              value: "github.com/gainskills/opentelemetry-demo"
+            - name: GIT_BRANCH
+              value: "main"
+            - name: NEW_RELIC_LABELS
+              value: "vcs.ref.head.name:$(GIT_BRANCH);vcs.repository.url.full:$(GIT_REPOSITORY_URL)"
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -1544,6 +1651,15 @@ spec:
               value: "true"
             - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
               value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_LOG_LEVEL_DENYLIST
+              value: "debug,trace" # Stop forwarding Debug/Trace logs to NR (Logging__LogLevel__Default=Debug stays for local output)
+            # --- Optional ceilings, NOT filters: only drop data when a pod exceeds the limit (uncomment to test) ---
+            # - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod limit per minute; logs above it are DROPPED (never reach NR). No effect below this volume. Sampled-transaction logs kept first (default 10000)
+            # - name: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
+            #   value: "1000" # Per-pod spans/min limit; excess spans are dropped, so traces may be incomplete. No effect below this volume (default 2000, max 10000).
+            # - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+            #   value: "request.headers.cookie,request.headers.authorization" # .NET: comma-separated list of attribute keys to exclude from all destinations.
           startupProbe:
             httpGet:
               path: /healthz

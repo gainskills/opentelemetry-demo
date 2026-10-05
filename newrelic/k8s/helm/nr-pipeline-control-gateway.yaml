@@ -117,6 +117,8 @@ generated:
           - 'attributes["healthcheck"] == "true"'
           - 'attributes["http.route"] == "/healthz"'
           - 'IsMatch(name, "(?i).*healthz.*")'
+          - 'IsMatch(attributes["transaction_name"], "(?i).*healthz.*")'
+          - 'IsMatch(attributes["name"], "(?i).*healthz.*")'
           - 'IsMatch(attributes["nr.path"], "(?i).*healthz.*")'
           - 'IsMatch(attributes["uri"], "(?i).*healthz.*")'
           - 'IsMatch(attributes["http.url"], "(?i).*healthz.*")'
@@ -162,6 +164,20 @@ generated:
             - 'replace_pattern(attributes["user.email"], "[^@\\s]+@", "***@")'
             - 'delete_key(attributes, "auth.token")'
 
+    # --- Attribute Length Limits & Truncation ---
+    # Enforces 4,095-char limit on attributes/bodies to prevent NrIntegrationError in New Relic
+    transform/Limits:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'truncate_all(attributes, 4095)'
+      log_statements:
+        - context: log
+          statements:
+            - 'truncate_all(attributes, 4095)'
+            - 'set(body, Substring(body, 0, 4095)) where IsString(body) and Len(body) > 4095'
+
 # ==============================================================================
 # Pipeline Control Gateway Exporters
 # Disables unused OTLP exporters; APM telemetry exports via nrcollectorexporter
@@ -181,12 +197,12 @@ generated:
       "metrics/otlp": null
       "logs/otlp": null
       "metrics/monitoring": null
-      # Helm replaces lists, so restate the full processor chain (filter first, then mask).
+      # Helm replaces lists, so restate the full processor chain (filter first, then mask, then limit).
       "traces/nr":
         receivers: [nrproprietaryreceiver]
-        processors: [filter/Traces, transform/PII]
+        processors: [filter/Traces, transform/PII, transform/Limits]
         exporters: [nrcollectorexporter]
       "logs/nr":
         receivers: [nrproprietaryreceiver]
-        processors: [filter/Logs, transform/PII]
+        processors: [filter/Logs, transform/PII, transform/Limits]
         exporters: [nrcollectorexporter]

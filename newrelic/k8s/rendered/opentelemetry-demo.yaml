@@ -2911,8 +2911,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: KAFKA_ADDR
               value: kafka:9092
             - name: KAFKA_TOPIC
@@ -2927,7 +2943,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 300Mi
@@ -3018,8 +3037,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: AD_PORT
               value: "8080"
             - name: AD_PROMETHEUS_PORT
@@ -3038,7 +3073,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=medium
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=medium
           resources:
             limits:
               memory: 300Mi
@@ -3118,8 +3156,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: AGENT_PORT
               value: "8010"
             - name: AGENT_ENDPOINT
@@ -3162,7 +3216,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 500Mi
@@ -3346,8 +3403,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: CART_PORT
               value: "8080"
             - name: ASPNETCORE_URLS
@@ -3368,7 +3441,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=high
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=high
           resources:
             limits:
               memory: 160Mi
@@ -3456,8 +3532,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: CHATBOT_PORT
               value: "7860"
             - name: CHATBOT_ROOT_PATH
@@ -3480,7 +3572,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 500Mi
@@ -3560,8 +3655,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: CHECKOUT_PORT
               value: "8080"
             - name: CART_ADDR
@@ -3596,7 +3707,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=critical
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=critical
           resources:
             limits:
               memory: 100Mi
@@ -3691,8 +3805,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: CURRENCY_PORT
               value: "8080"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -3705,7 +3835,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=high
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=high
           resources:
             limits:
               memory: 20Mi
@@ -3785,8 +3918,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: EMAIL_PORT
               value: "8080"
             - name: APP_ENV
@@ -3801,7 +3950,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=medium
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=medium
           resources:
             limits:
               memory: 100Mi
@@ -3892,8 +4044,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://$(OTEL_COLLECTOR_NAME):4318
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -3904,7 +4072,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 75Mi
@@ -3947,8 +4118,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://$(OTEL_COLLECTOR_NAME):4318
             - name: FLAGD_UI_PORT
@@ -3961,7 +4148,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 250Mi
@@ -4056,8 +4246,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: KAFKA_ADDR
               value: kafka:9092
             - name: KAFKA_TOPIC
@@ -4078,7 +4284,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 300Mi
@@ -4165,8 +4374,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: FRONTEND_PORT
               value: "8080"
             - name: PORT
@@ -4205,7 +4430,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=critical
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=critical
           resources:
             limits:
               memory: 250Mi
@@ -4294,8 +4522,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: ENVOY_PORT
               value: "8080"
             - name: ENVOY_ADDR
@@ -4356,7 +4600,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=critical
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=critical
           resources:
             limits:
               memory: 90Mi
@@ -4446,8 +4693,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: IMAGE_PROVIDER_PORT
               value: "8081"
             - name: OTEL_COLLECTOR_PORT_GRPC
@@ -4458,7 +4721,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 50Mi
@@ -4540,8 +4806,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: KAFKA_ADVERTISED_LISTENERS
               value: PLAINTEXT://kafka:9092
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -4560,7 +4842,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 700Mi
@@ -4645,8 +4930,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: LOCUST_WEB_HOST
               value: 0.0.0.0
             - name: LOCUST_WEB_PORT
@@ -4685,7 +4986,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 1500Mi
@@ -4765,8 +5069,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: MCP_PORT
               value: "8011"
             - name: MCP_ENDPOINT
@@ -4783,7 +5103,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 500Mi
@@ -4920,8 +5243,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: PAYMENT_PORT
               value: "8080"
             - name: FLAGD_HOST
@@ -4938,7 +5277,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=critical
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=critical
           resources:
             limits:
               memory: 140Mi
@@ -5022,8 +5364,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: PRODUCT_CATALOG_PORT
               value: "8080"
             - name: FLAGD_HOST
@@ -5050,7 +5408,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=high
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=high
           resources:
             limits:
               memory: 100Mi
@@ -5152,8 +5513,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: QUOTE_PORT
               value: "8080"
             - name: OTEL_PHP_AUTOLOAD_ENABLED
@@ -5168,7 +5545,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=low
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=low
           resources:
             limits:
               memory: 40Mi
@@ -5252,8 +5632,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: RECOMMENDATION_PORT
               value: "8080"
             - name: PRODUCT_CATALOG_ADDR
@@ -5274,7 +5670,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=medium
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=medium
           resources:
             limits:
               memory: 500Mi
@@ -5354,8 +5753,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: SHIPPING_PORT
               value: "8080"
             - name: QUOTE_ADDR
@@ -5374,7 +5789,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),service.criticality=high
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL),service.criticality=high
           resources:
             limits:
               memory: 20Mi
@@ -5467,8 +5885,24 @@ spec:
               value: nr-k8s-otel-collector-gateway
             - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
               value: delta
+            - name: GIT_REPOSITORY_URL
+              value: https://github.com/gainskills/opentelemetry-demo
+            - name: GIT_BRANCH
+              value: main
+            - name: GIT_COMMIT_SHA
+              value: ""
+            - name: CI_PIPELINE_RUN_ID
+              value: ""
+            - name: CI_PIPELINE_RUN_URL
+              value: ""
             - name: OTEL_METRIC_EXPORT_INTERVAL
-              value: "10000"
+              value: "60000"
+            - name: OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT
+              value: "4095"
+            - name: OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT
+              value: "64"
+            - name: OTEL_SPAN_EVENT_COUNT_LIMIT
+              value: "20"
             - name: TELEMETRY_DOCS_PORT
               value: "8000"
             - name: OTEL_COLLECTOR_HOST
@@ -5479,7 +5913,10 @@ spec:
               value: service.name=$(OTEL_SERVICE_NAME), service.namespace=opentelemetry-demo,
                 service.version=3.1.0, service.instance.id=$(OTEL_POD_NAME),
                 k8s.container.name=$(OTEL_K8S_CONTAINER_NAME), k8s.pod.name=$(OTEL_POD_NAME),
-                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME)
+                k8s.pod.uid=$(OTEL_POD_UID), k8s.namespace.name=$(OTEL_NAMESPACE_NAME), k8s.cluster.name=$(OTEL_CLUSTER_NAME),
+                vcs.repository.url.full=$(GIT_REPOSITORY_URL), vcs.ref.head.name=$(GIT_BRANCH),
+                vcs.ref.head.revision=$(GIT_COMMIT_SHA), cicd.pipeline.run.id=$(CI_PIPELINE_RUN_ID),
+                cicd.pipeline.run.url.full=$(CI_PIPELINE_RUN_URL)
           resources:
             limits:
               memory: 100Mi

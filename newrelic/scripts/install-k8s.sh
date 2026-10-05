@@ -328,9 +328,6 @@ fi
 if [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
   echo "Installing OpenTelemetry Demo microservices (destination: ${OTEL_DEMO_DEST:-default})..."
   case "${OTEL_DEMO_DEST:-default}" in
-    pcg)
-      install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_PCG_VALUES_PATH"
-      ;;
     nrdot)
       install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"
       ;;
@@ -338,9 +335,7 @@ if [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
       install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
       ;;
     *)
-      if [ "${ROUTE_DEMO_TO_PCG:-n}" = "y" ]; then
-        install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_PCG_VALUES_PATH"
-      elif [ "${ENABLE_NRDOT:-y}" != "y" ] && [ "${ENABLE_DEMO_OTEL_COLLECTOR:-n}" = "y" ]; then
+      if [ "${ENABLE_NRDOT:-y}" != "y" ] && [ "${ENABLE_DEMO_OTEL_COLLECTOR:-n}" = "y" ]; then
         install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER" -f "$OTEL_DEMO_NRI_VALUES_PATH" "opentelemetry-collector.config.exporters.otlphttp/newrelic.endpoint=$NEW_RELIC_OTLP_ENDPOINT"
       else
         install_or_upgrade_chart "$OTEL_DEMO_RELEASE_NAME" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_CHART_VERSION" "$OTEL_DEMO_VALUES_PATH" "$OTEL_DEMO_NAMESPACE" "$IS_OPENSHIFT_CLUSTER"

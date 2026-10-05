@@ -1182,14 +1182,14 @@ data:
         brokers:
         - kafka:9092
         cluster_alias: otel-demo-kafka
-        collection_interval: 15s
+        collection_interval: 30s
         protocol_version: 2.0.0
         scrapers:
         - brokers
         - topics
         - consumers
       postgresql:
-        collection_interval: 15s
+        collection_interval: 30s
         connection_pool:
           max_idle: 2
           max_idle_time: 10m
@@ -1233,7 +1233,7 @@ data:
         config:
           scrape_configs:
           - job_name: ad
-            scrape_interval: 10s
+            scrape_interval: 30s
             static_configs:
             - targets:
               - ad:9465
@@ -1915,7 +1915,6 @@ data:
         exclude_dimensions:
         - span.name
         - status.code
-        metrics_flush_interval: 30s
         resource_metrics_key_attributes:
         - service.name
         - telemetry.sdk.language
@@ -2749,7 +2748,7 @@ spec:
         app.kubernetes.io/name: nr-k8s-otel-collector
         component: deployment
       annotations:
-        checksum/config: 5b9550755e6d210d0f931aa22429778c5d2c53fbcace3a763d9d347b57e3a24c
+        checksum/config: 72b8e4fbe84a305624e34bff9aa225c97b9464aecbc28a855481f8da1a306c36
     spec:
       serviceAccountName: nr-k8s-otel-collector
       containers:

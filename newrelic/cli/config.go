@@ -36,7 +36,6 @@ var (
 		"otel-values":          filepath.Join("..", "k8s", "helm", "opentelemetry-demo-base.yaml"),
 		"otel-browser-values":  filepath.Join("..", "k8s", "helm", "nr-browser.yaml"),
 		"otel-nri-values":      filepath.Join("..", "k8s", "helm", "opentelemetry-demo-pure.yaml"),
-		"otel-pcg-values":      filepath.Join("..", "k8s", "helm", "opentelemetry-demo-pcg.yaml"),
 		"nr-k8s-values":        filepath.Join("..", "k8s", "helm", "nr-k8s-otel-collector.yaml"),
 		"nri-bundle-values":    filepath.Join("..", "k8s", "helm", "nri-bundle.yaml"),
 		"pcg-values":           filepath.Join("..", "k8s", "helm", "nr-pipeline-control-gateway.yaml"),
