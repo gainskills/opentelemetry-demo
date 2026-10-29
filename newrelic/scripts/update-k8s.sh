@@ -4,7 +4,10 @@
 #
 # Purpose:
 #   Updates the OpenTelemetry Demo and New Relic K8s Helm chart versions,
-#   and generates their Kubernetes manifests for deployment.
+#   and generates their Kubernetes manifests for deployment. Also syncs the
+#   opentelemetry-collector-contrib image tag to the newest plain vX.Y.Z GitHub
+#   release (no prereleases or drafts) whose image exists on Docker Hub. The script
+#   exits if Docker Hub answers with anything other than 200 or 404.
 #   Should be run after syncing with the latest upstream changes.
 #
 # How to run:
@@ -27,7 +30,9 @@
 # Dependencies:
 #   - helm
 #   - yq (YAML processor)
-#   - gh (GitHub CLI)
+#   - curl
+#   - gh (GitHub CLI) - needed to look up the latest contrib release, and to create the PR
+#     unless using --dry-run
 #   - Access to the project source and Helm values files
 # -----------------------------------------------------------------------------
 set -euo pipefail
@@ -90,10 +95,31 @@ update_go_const() {
     fi
 }
 
-# Resolve the latest opentelemetry-collector-contrib release from GitHub.
+contrib_image_tag_exists() {
+    local code
+    code=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' \
+      "https://hub.docker.com/v2/repositories/otel/opentelemetry-collector-contrib/tags/$1" || true)
+    case "$code" in
+      200) return 0 ;;
+      404) return 1 ;;
+      *) echo "Error: unexpected HTTP $code checking Docker Hub tag $1" >&2; exit 1 ;;
+    esac
+}
+
+# Resolve the latest opentelemetry-collector-contrib release from GitHub whose image
+# tag is published on Docker Hub (a GitHub release can exist without a published image).
+# The jq regex only accepts plain vX.Y.Z tags, which excludes nightly and sub-module tags.
 get_latest_contrib_version() {
-    gh api repos/open-telemetry/opentelemetry-collector-contrib/releases/latest --jq '.tag_name' \
-      | sed 's/^v//'
+    local tags tag
+    tags=$(gh api 'repos/open-telemetry/opentelemetry-collector-contrib/releases?per_page=100' \
+        --jq '.[] | select((.prerelease | not) and (.draft | not) and (.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .tag_name' \
+      | sed 's/^v//') || return 1
+    for tag in $tags; do
+        if contrib_image_tag_exists "$tag"; then
+            echo "$tag"
+            return
+        fi
+    done
 }
 
 ensure_helm_repo "newrelic" "https://helm-charts.newrelic.com"
@@ -131,7 +157,7 @@ if template_chart "otel-demo" "open-telemetry/opentelemetry-demo" "$OTEL_DEMO_RE
 fi
 
 # Sync the opentelemetry-collector-contrib version used by the NR K8s collector and
-# the Docker Compose setup to the latest upstream contrib release.
+# the Docker Compose setup to the latest upstream contrib release published on Docker Hub.
 CONTRIB_UPDATED=false
 CONTRIB_VERSION=$(get_latest_contrib_version)
 if [ -z "$CONTRIB_VERSION" ]; then
@@ -153,11 +179,11 @@ if [ "$CONTRIB_VERSION" != "$CURR_CONTRIB_VERSION" ]; then
   # (rather than `yq -i`) keeps the diff surgical and preserves the file's comments
   # and formatting.
   sed_i '/repository: otel\/opentelemetry-collector-contrib/{n;s/tag: .*/tag: "'"$CONTRIB_VERSION"'"/;}' "$NR_K8S_VALUES_PATH"
-  sed_i "s#\(COLLECTOR_CONTRIB_IMAGE=.*opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION#" "$ENV_PATH"
+  sed_i "s#\(image: .*opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION#" "$NR_DOCKER_COMPOSE_PATH"
   if [ -n "${OTEL_GATEWAY_MANIFEST_PATH:-}" ] && [ -f "$OTEL_GATEWAY_MANIFEST_PATH" ]; then
     sed_i "s#\(image: \"otel/opentelemetry-collector-contrib:\).*#\1$CONTRIB_VERSION\"#" "$OTEL_GATEWAY_MANIFEST_PATH"
   fi
-  echo "Updated images.collector.tag in $NR_K8S_VALUES_PATH, COLLECTOR_CONTRIB_IMAGE in $ENV_PATH, and $OTEL_GATEWAY_MANIFEST_PATH"
+  echo "Updated images.collector.tag in $NR_K8S_VALUES_PATH and otel-collector image in $NR_DOCKER_COMPOSE_PATH"
   CONTRIB_UPDATED=true
 else
   echo "opentelemetry-collector-contrib version is already in sync."

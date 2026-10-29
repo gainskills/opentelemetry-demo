@@ -126,37 +126,6 @@ ensure_pcg_tls() {
     | kubectl apply -f -
 }
 
-# Set up the NR collector postgresql receiver's monitoring access, per
-# https://docs.newrelic.com/docs/opentelemetry/database/postgresql/hosted/.
-# The chart's init.sql already creates $POSTGRES_MONITOR_USER with pg_monitor
-# and enables pg_stat_statements in both astronomy_db and postgres, but it
-# doesn't grant access to the app's catalog/accounting schemas, which
-# top_query's EXPLAIN needs to read. ALTER DEFAULT PRIVILEGES covers tables
-# services create after this script runs.
-# All statements are idempotent (no-op if already applied) and require no DB
-# restart, since shared_preload_libraries is set via the chart's postgresql
-# command override.
-setup_pg_monitoring() {
-  echo "Setting up postgresql receiver monitoring access for $POSTGRES_MONITOR_USER..."
-  if ! kubectl rollout status deployment/astronomy-db -n "$OTEL_DEMO_NAMESPACE" --timeout=120s >/dev/null 2>&1; then
-    echo "Warning: astronomy-db deployment not ready; skipping monitoring setup. Run manually later."
-    return
-  fi
-  local app_db_ddl="GRANT USAGE ON SCHEMA catalog TO $POSTGRES_MONITOR_USER; GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO $POSTGRES_MONITOR_USER; ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT SELECT ON TABLES TO $POSTGRES_MONITOR_USER; GRANT USAGE ON SCHEMA accounting TO $POSTGRES_MONITOR_USER; GRANT SELECT ON ALL TABLES IN SCHEMA accounting TO $POSTGRES_MONITOR_USER; ALTER DEFAULT PRIVILEGES IN SCHEMA accounting GRANT SELECT ON TABLES TO $POSTGRES_MONITOR_USER;"
-  for i in {1..30}; do
-    if kubectl exec -n "$OTEL_DEMO_NAMESPACE" deployment/astronomy-db -- pg_isready -U postgres >/dev/null 2>&1; then
-      if kubectl exec -n "$OTEL_DEMO_NAMESPACE" deployment/astronomy-db -- \
-          sh -c "psql -v ON_ERROR_STOP=1 -U postgres -d astronomy_db -c '$app_db_ddl'"; then
-        echo "postgresql monitoring configured for $POSTGRES_MONITOR_USER."
-        return
-      fi
-    fi
-    sleep 1
-  done
-  echo "Warning: failed to configure postgresql monitoring for $POSTGRES_MONITOR_USER. Run manually with:"
-  echo "  kubectl exec -n $OTEL_DEMO_NAMESPACE deployment/astronomy-db -- sh -c 'psql -U postgres -d astronomy_db -c \"$app_db_ddl\"'"
-}
-
 ensure_namespace() {
   local namespace=$1
   if kubectl get ns "$namespace" &> /dev/null; then
@@ -344,11 +313,6 @@ if [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
   esac
 else
   echo "Skipping OpenTelemetry Demo microservices installation (ENABLE_OTEL_DEMO_APPS=n)."
-fi
-
-# Set up postgres db grants
-if [ "$ENABLE_NRDOT" = "y" ] && [ "${ENABLE_OTEL_DEMO_APPS:-y}" = "y" ]; then
-  setup_pg_monitoring
 fi
 
 # Deploy dedicated New Relic APM test workloads (Hybrid and/or Pure APM Native)

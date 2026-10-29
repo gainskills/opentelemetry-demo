@@ -25,8 +25,10 @@ default:
           fieldPath: metadata.namespace
     - name: OTEL_CLUSTER_NAME
       value: opentelemetry-demo
+    # Service hosts below are FQDNs: musl (Alpine images) ignores a resolv.conf
+    # search line of 256+ bytes, which sandbox host domains can cause.
     - name: OTEL_COLLECTOR_NAME
-      value: nr-k8s-otel-collector-gateway
+      value: nr-k8s-otel-collector-gateway.{{ .Release.Namespace }}.svc.cluster.local
     - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
       value: delta
     - name: GIT_REPOSITORY_URL
@@ -85,20 +87,75 @@ components:
     resources:
       limits:
         memory: 300Mi
+        cpu: 200m
       requests:
-        memory: 200Mi
+        memory: 160Mi
+        cpu: 30m
   checkout:
     resources:
       limits:
         memory: 100Mi
+        cpu: 300m
       requests:
-        memory: 50Mi
+        memory: 16Mi
+        cpu: 14m
+  kafka:
+    envOverrides:
+      - name: KAFKA_ADVERTISED_LISTENERS
+        value: PLAINTEXT://kafka.{{ .Release.Namespace }}.svc.cluster.local:9092
+      - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+        value: 1@kafka.{{ .Release.Namespace }}.svc.cluster.local:9093
+    resources:
+      requests:
+        cpu: 60m
+        memory: 950Mi
+      limits:
+        cpu: 1000m
+        memory: 1200Mi
+  cart:
+    envOverrides:
+      - name: VALKEY_ADDR
+        value: valkey-cart.{{ .Release.Namespace }}.svc.cluster.local:6379
+      - name: FLAGD_HOST
+        value: flagd.{{ .Release.Namespace }}.svc.cluster.local
+      - name: OPAMP_SERVER_ENDPOINT
+        value: ws://opamp-server.{{ .Release.Namespace }}.svc.cluster.local:4320/v1/opamp
+    resources:
+      requests:
+        cpu: 35m
+        memory: 75Mi
+      limits:
+        cpu: 500m
+  email:
+    envOverrides:
+      - name: FLAGD_HOST
+        value: flagd.{{ .Release.Namespace }}.svc.cluster.local
+    resources:
+      requests:
+        cpu: 12m
+        memory: 70Mi
+      limits:
+        cpu: 200m
+  recommendation:
+    envOverrides:
+      - name: FLAGD_HOST
+        value: flagd.{{ .Release.Namespace }}.svc.cluster.local
+      - name: PRODUCT_CATALOG_ADDR
+        value: product-catalog.{{ .Release.Namespace }}.svc.cluster.local:8080
+    resources:
+      requests:
+        cpu: 60m
+        memory: 60Mi
+      limits:
+        cpu: 750m
   product-catalog:
     resources:
       limits:
         memory: 100Mi
+        cpu: 400m
       requests:
-        memory: 50Mi
+        memory: 24Mi
+        cpu: 55m
     useDefault:
       env: true
     envOverrides:
@@ -113,6 +170,13 @@ components:
       # LLM, set this to "False" and provide LLM_BASE_URL/API_KEY.
       - name: USE_VCR
         value: "True"
+    resources:
+      requests:
+        cpu: 700m
+        memory: 1250Mi
+      limits:
+        cpu: 1000m
+        memory: 1536Mi
   astronomy-db:
     # Preload pg_stat_statements so the NR collector's postgresql receiver can
     # read db.server.top_query; must be set at server start (not via CREATE
@@ -132,11 +196,59 @@ components:
       - track_activity_query_size=4096
       - -c
       - track_functions=all
+    # Extra DB grants on top of the chart's init.sql, run after it (zz- prefix). The
+    # postgresql-init mount is repeated because Helm replaces lists.
+    # Permanent: the New Relic-only grants (otel/public schemas for monitoring_user) have no
+    # upstream equivalent, so this override stays. Parts of it are temporary, see the
+    # REMOVE/KEEP comments inside zz-grants.sql:
+    #   - astronomy_user UPDATE (productCatalogLockContention needs it): DROP once
+    #     https://github.com/open-telemetry/opentelemetry-helm-charts/pull/2450 is in a pinned chart.
+    #   - other monitoring_user grants: DROP once a chart syncs a demo release with
+    #     https://github.com/open-telemetry/opentelemetry-demo/pull/4019 (after 3.1.0).
+    mountedConfigMaps:
+      - name: postgresql-init
+        mountPath: /docker-entrypoint-initdb.d/init.sql
+        subPath: init.sql
+        existingConfigMap: postgresql-init
+      - name: postgresql-grants
+        mountPath: /docker-entrypoint-initdb.d/zz-grants.sql
+        subPath: zz-grants.sql
+        data:
+          zz-grants.sql: |
+            \connect astronomy_db
+            -- REMOVE once a pinned chart syncs demo PR 4019 (upstream init.sql grants these).
+            GRANT USAGE ON SCHEMA accounting TO monitoring_user;
+            GRANT SELECT ON accounting."order" TO monitoring_user;
+            GRANT SELECT ON accounting.orderitem TO monitoring_user;
+            GRANT USAGE ON SCHEMA catalog TO monitoring_user;
+            GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO monitoring_user;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT SELECT ON TABLES TO monitoring_user;
+            -- REMOVE once helm-charts PR 2450 is in a pinned chart.
+            GRANT UPDATE ON ALL TABLES IN SCHEMA catalog TO astronomy_user;
+            -- REMOVE once the pinned chart's init.sql runs these (already in upstream demo main).
+            GRANT pg_monitor TO monitoring_user;
+            CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+            -- KEEP: New Relic-only grants, no upstream equivalent. If these are all that
+            -- remains, shrink this file to \connect + these lines.
+            CREATE SCHEMA IF NOT EXISTS otel;
+            GRANT USAGE ON SCHEMA otel TO monitoring_user;
+            GRANT USAGE ON SCHEMA public TO monitoring_user;
+            GRANT SELECT ON ALL TABLES IN SCHEMA public TO monitoring_user;
+    additionalVolumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 128Mi
+    additionalVolumeMounts:
+      - name: dshm
+        mountPath: /dev/shm
     resources:
       limits:
-        memory: 200Mi
+        memory: 384Mi
+        cpu: 400m
       requests:
-        memory: 100Mi
+        memory: 90Mi
+        cpu: 15m
   load-generator:
     # Exclude load-generator logs from newrelic-logging (Fluent Bit DaemonSet)
     # to significantly reduce log ingestion volume during synthetic load experiments.
@@ -145,10 +257,128 @@ components:
     # v3.1.0+ Locust load generator: Python-based with Playwright browser automation
     # Uses upstream defaults for LOCUST_* and FLAGD_* vars
     # NewRelic customizations:
-    # - OTEL_EXPORTER_OTLP_ENDPOINT: gRPC endpoint for Locust (Python) traces/metrics export
+    # - OTEL_EXPORTER_OTLP_ENDPOINT: Locust (Python) uses OTLP gRPC exporters, so this must be the gRPC port (4317), not HTTP (4318)
     envOverrides:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://$(OTEL_COLLECTOR_NAME):4318
+        value: http://$(OTEL_COLLECTOR_NAME):4317
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 700Mi
+      limits:
+        cpu: 4000m
+        memory: 4Gi
+  ad:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 280Mi
+      limits:
+        cpu: 750m
+        memory: 450Mi
+  chatbot:
+    resources:
+      requests:
+        cpu: 110m
+        memory: 175Mi
+      limits:
+        cpu: 1000m
+  currency:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 15Mi
+      limits:
+        cpu: 200m
+        memory: 40Mi
+  fraud-detection:
+    resources:
+      requests:
+        cpu: 30m
+        memory: 300Mi
+      limits:
+        cpu: 1000m
+        memory: 384Mi
+  frontend:
+    resources:
+      requests:
+        cpu: 75m
+        memory: 170Mi
+      limits:
+        cpu: 1000m
+  frontend-proxy:
+    resources:
+      requests:
+        cpu: 60m
+        memory: 32Mi
+      limits:
+        cpu: 300m
+  image-provider:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 10Mi
+      limits:
+        cpu: 200m
+  mcp:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 165Mi
+      limits:
+        cpu: 300m
+  opamp-server:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 10Mi
+      limits:
+        cpu: 100m
+  payment:
+    resources:
+      requests:
+        cpu: 18m
+        memory: 85Mi
+      limits:
+        cpu: 200m
+  quote:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 28Mi
+      limits:
+        cpu: 200m
+        memory: 64Mi
+  shipping:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 10Mi
+      limits:
+        cpu: 200m
+        memory: 40Mi
+  telemetry-docs:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 10Mi
+      limits:
+        cpu: 100m
+  valkey-cart:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 15Mi
+      limits:
+        cpu: 100m
+        memory: 40Mi
+  flagd:
+    resources:
+      requests:
+        cpu: 30m
+        memory: 55Mi
+      limits:
+        cpu: 300m
 
 # --- Optional per-language OTel agent switches (add under components.<svc>.envOverrides to test) ---
 # ad / fraud-detection (Java agent):
