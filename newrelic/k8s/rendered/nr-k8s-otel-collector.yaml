@@ -1178,6 +1178,9 @@ data:
                 - action: replace
                   target_label: job_label
                   replacement: scheduler
+      http_check/frontend-proxy:
+        targets:
+        - endpoint: http://frontend-proxy:8080
       kafka_metrics:
         brokers:
         - kafka:9092
@@ -1237,6 +1240,9 @@ data:
             static_configs:
             - targets:
               - ad:9465
+      redis:
+        collection_interval: 30s
+        endpoint: valkey-cart:6379
 
     processors:
       transform/promote_job_label:
@@ -1770,13 +1776,18 @@ data:
         send_batch_max_size: 1000
         timeout: 30s
         send_batch_size : 800
+      cumulative_to_delta:
+        exclude:
+          match_type: strict
+          metrics:
+          - kube_pod_container_status_restarts_total
       filter/drop-spanmetrics-services:
         metrics:
           datapoint:
           - metric.name == "traces.span.metrics.calls" and not IsMatch(resource.attributes["service.name"],
-            "(currency|quote|payment|product-reviews|recommendation)")
+            "(currency|quote|payment|recommendation)")
           - metric.name == "traces.span.metrics.duration" and not IsMatch(resource.attributes["service.name"],
-            "(currency|quote|payment|product-reviews|recommendation)")
+            "(currency|quote|payment|recommendation)")
       filter/python-system-metrics:
         error_mode: ignore
         metrics:
@@ -1799,10 +1810,69 @@ data:
         attributes:
         - action: upsert
           key: service.instance.id
-          value: otel-demo-astronomy-db
-      resourcedetection/otel-demo:
+          value: astronomy-db:5432
+        - action: upsert
+          key: server.address
+          value: astronomy-db
+      resource_detection/otel-demo:
         detectors:
         - env
+      transform/flag_scenarios:
+        error_mode: ignore
+        log_statements:
+        - conditions:
+          - resource.attributes["service.name"] == "ad" and IsMatch(body.string, "adManualGc")
+          context: log
+          statements:
+          - set(body, "[gc] Pause Full (System.gc()) 1843M->412M(2048M) 1312.447ms")
+        - conditions:
+          - resource.attributes["service.name"] == "ad" and IsMatch(body.string, "High CPU-Load
+            problempattern")
+          context: log
+          statements:
+          - 'set(body, "Request processing time exceeded threshold: thread pool saturated,
+            active=200 queued=1312 cpu=98%")'
+        - conditions:
+          - resource.attributes["service.name"] == "checkout" and IsMatch(body.string, "kafkaQueueProblems")
+          context: log
+          statements:
+          - 'set(body, "kafka: producer queue full: local queue saturated, delivery to topic
+            \"orders\" delayed (queue.buffering.max.messages reached)")'
+        - conditions:
+          - resource.attributes["service.name"] == "fraud-detection" and IsMatch(body.string,
+            "kafkaQueueProblems")
+          context: log
+          statements:
+          - 'set(body, "Consumer group \"frauddetection\" lag increasing on topic \"orders\":
+            poll() loop exceeded expected interval, processing 1000ms per record")'
+        - conditions:
+          - resource.attributes["service.name"] == "product-catalog" and IsMatch(body.string,
+            "^lock contention scenario active")
+          context: log
+          statements:
+          - 'set(body, "pq: canceling statement due to lock timeout: relation \"catalog.products\"
+            is locked in ACCESS EXCLUSIVE mode by another transaction")'
+        - conditions:
+          - resource.attributes["service.name"] == "shipping" and IsMatch(body.string, "intlShippingSlowdown")
+          context: log
+          statements:
+          - set(body, "Carrier rate API timeout for international shipment, falling back
+            to slow path")
+        trace_statements:
+        - conditions:
+          - resource.attributes["service.name"] == "product-catalog" and IsMatch(status.message,
+            "Product Catalog Fail Feature Flag Enabled")
+          context: span
+          statements:
+          - 'set(status.message, "rpc error: code = Internal desc = failed to query product:
+            pq: could not read block in file \"base/16384/24576\": Input/output error")'
+        - conditions:
+          - resource.attributes["service.name"] == "product-catalog" and IsMatch(name, "Product
+            Catalog Fail Feature Flag Enabled")
+          context: spanevent
+          statements:
+          - 'set(name, "rpc error: code = Internal desc = failed to query product: pq: could
+            not read block in file \"base/16384/24576\": Input/output error")'
       transform/kafka_cluster_name:
         error_mode: ignore
         metric_statements:
@@ -1813,22 +1883,16 @@ data:
           - set(attributes["kafka.cluster.name"], "otel-demo-kafka")
       transform/otel-demo:
         error_mode: ignore
-        trace_statements:
-        - conditions:
-          - span.kind == SPAN_KIND_SERVER and resource.attributes["service.name"] == "frontend"
-            and span.attributes["http.route"] == nil
-          context: span
+        log_statements:
+        - context: log
           statements:
-          - set(span.attributes["http.route"], "/api/cart") where IsMatch(span.attributes["http.target"],
-            "\\/api\\/cart")
-          - set(span.attributes["http.route"], "/api/checkout") where IsMatch(span.attributes["http.target"],
-            "\\/api\\/checkout")
-          - set(span.attributes["http.route"], "/api/products/{productId}") where IsMatch(span.attributes["http.target"],
-            "\\/api\\/products\\/.*")
-          - set(span.attributes["http.route"], "/api/recommendations") where IsMatch(span.attributes["http.target"],
-            "\\/api\\/recommendations")
-          - set(span.attributes["http.route"], "/api/data") where IsMatch(span.attributes["http.target"],
-            "\\/api\\/data.*")
+          - truncate_all(attributes, 4095)
+          - truncate_all(resource.attributes, 4095)
+        trace_statements:
+        - context: span
+          statements:
+          - truncate_all(attributes, 4095)
+          - truncate_all(resource.attributes, 4095)
       transform/strip_ad_metric_metadata:
         metric_statements:
         - conditions:
@@ -1892,7 +1956,7 @@ data:
           - context: metric
             condition: instrumentation_scope.attributes["job_label"] == "scheduler"
             pipelines: [metrics/nr_controlplane]
-      spanmetrics:
+      span_metrics:
         aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
         dimensions:
         - name: http.method
@@ -1915,6 +1979,7 @@ data:
         exclude_dimensions:
         - span.name
         - status.code
+        metrics_flush_interval: 30s
         resource_metrics_key_attributes:
         - service.name
         - telemetry.sdk.language
@@ -1930,8 +1995,10 @@ data:
           - otlp_http/newrelic
           processors:
           - memory_limiter
-          - resourcedetection/otel-demo
+          - resource_detection/otel-demo
           - resource/otel-demo
+          - transform/otel-demo
+          - transform/flag_scenarios
           - batch
           receivers:
           - otlp
@@ -1951,17 +2018,19 @@ data:
           processors:
           - memory_limiter
           - filter/python-system-metrics
-          - resourcedetection/otel-demo
+          - resource_detection/otel-demo
           - resource/otel-demo
           - transform/kafka_cluster_name
           - k8s_attributes/ksm
           - transform/strip_ad_metric_metadata
-          - cumulativetodelta
+          - cumulative_to_delta
           - batch
           receivers:
           - otlp
           - prometheus/ad
           - kafka_metrics
+          - redis
+          - http_check/frontend-proxy
         metrics/postgres:
           exporters:
           - otlp_http/newrelic
@@ -1981,16 +2050,18 @@ data:
           - resource/newrelic_spanmetrics_flag
           - batch
           receivers:
-          - spanmetrics
+          - span_metrics
         traces/otel-demo:
           exporters:
-          - spanmetrics
+          - span_metrics
           - otlp_http/newrelic
           processors:
           - memory_limiter
-          - resourcedetection/otel-demo
+          - resource_detection/otel-demo
           - resource/otel-demo
           - k8s_attributes/ksm
+          - transform/otel-demo
+          - transform/flag_scenarios
           - gen_ai_normalizer
           - batch
           receivers:
@@ -2748,7 +2819,7 @@ spec:
         app.kubernetes.io/name: nr-k8s-otel-collector
         component: deployment
       annotations:
-        checksum/config: 3239209c0cd1e3b6e3a37c09bb8a8dbed1538cb0cb182450c1959b816f3be063
+        checksum/config: 968356232060523b147f9ec585000ec405f56c65a0d3368c0db9bbe81778c252
     spec:
       serviceAccountName: nr-k8s-otel-collector
       containers:
