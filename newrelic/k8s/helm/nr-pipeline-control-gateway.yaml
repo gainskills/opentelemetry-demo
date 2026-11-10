@@ -184,7 +184,14 @@ generated:
 # ==============================================================================
   exporters:
     "otlp/exporter": null
-    otlphttp: null
+    # Required from 3.2.0: the image's built-in metrics/monitoring pipeline exports through otlphttp.
+    otlphttp:
+      endpoint: "https://otlp.nr-data.net"
+      headers:
+        api-key: "${env:NEW_RELIC_LICENSE_KEY}"
+    # Prints each span the gateway holds before export (incl. Start time) to the pod log.
+    debug:
+      verbosity: detailed
 
 # ==============================================================================
 # Pipeline Control Gateway Service Pipelines
@@ -202,6 +209,11 @@ generated:
         receivers: [nrproprietaryreceiver]
         processors: [filter/Traces, transform/PII, transform/Limits]
         exporters: [nrcollectorexporter]
+      # Separate pipeline: sharing traces/nr with debug makes nrcollectorexporter panic on read-only data.
+      "traces/debug":
+        receivers: [nrproprietaryreceiver]
+        processors: []
+        exporters: [debug]
       "logs/nr":
         receivers: [nrproprietaryreceiver]
         processors: [filter/Logs, transform/PII, transform/Limits]
